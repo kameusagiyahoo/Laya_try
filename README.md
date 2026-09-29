@@ -18,6 +18,30 @@ https://kameusagiyahoo.github.io/Laya_try/
 - ENGINE / INFERENCE / 実機テスト結果を localStorage に保存
 - モデル重みはこのリポジトリには保存しない
 
+
+### 2. Model Diagnostics
+
+https://kameusagiyahoo.github.io/Laya_try/model.html
+
+Snake の画面が表示されたことだけでは成功扱いにせず、次の順に実機で確認します。
+
+1. browser / storage precheck
+2. Laya Web model assets のダウンロード進捗
+3. ONNX Runtime / WebGPU または WASM backend の初期化
+4. choice の smoke test を1回実行
+5. 実推論が成功した場合だけ `READY`
+
+現在の `@r4ai/laya-web` が想定するモデル資産は合計約900MBです。
+
+主な資産:
+
+- `model.onnx`: 約5.37 MB
+- `model.onnx.data`: 約501.20 MB
+- `embeddings.f16.bin`: 約393.22 MB
+- tokenizer: 約34.36 MB
+
+モデルは `r4ai/laya-web` の公開GitHub Pagesから取得し、推論はブラウザ内で行います。
+
 ブラウザ実験で使う公開モデル:
 
 - laya-multilingual
@@ -25,7 +49,7 @@ https://kameusagiyahoo.github.io/Laya_try/
 - ONNX FP16: 約 647 MB
 - WebGPU + ONNX Runtime Web
 
-### 2. ADK 2 Lab
+### 3. ADK 2 Lab
 
 https://kameusagiyahoo.github.io/Laya_try/adk.html
 
@@ -49,7 +73,7 @@ Laya Decision Node
 
 Pages 側の値は architecture / trace 確認用シミュレーションであり、実 Laya の推論値ではありません。
 
-### 3. Runnable ADK 2 + Laya backend
+### 4. Runnable ADK 2 + Laya backend
 
 `backend/adk_laya/agent.py` には実際に動かすための Google ADK 2 workflow を置いています。
 
