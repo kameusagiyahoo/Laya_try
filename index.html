@@ -125,7 +125,35 @@
     </section>
 
     <section class="card">
-      <p class="kicker">04 / ADK 2 LAB</p>
+      <p class="kicker">04 / MODEL DIAGNOSTICS</p>
+      <h2>モデルが本当に読み込めたか確認</h2>
+      <p class="body-copy">モデル資産の取得進捗、ONNX Runtime初期化、1回の実Laya推論まで確認し、すべて通った場合だけREADYと表示します。Snakeの画面が開いただけでは成功扱いにしません。</p>
+      <div class="demo-grid">
+        <article class="demo">
+          <div class="demo-top">
+            <span class="demo-icon">M</span>
+            <div>
+              <h3>Real Model Check</h3>
+              <p>約900MBのモデル資産をファイル単位で追跡し、smoke testまで実行します。</p>
+            </div>
+          </div>
+          <a class="button primary" href="./model.html">Model Diagnosticsを開く</a>
+        </article>
+        <article class="demo">
+          <div class="demo-top">
+            <span class="demo-icon">✓</span>
+            <div>
+              <h3>READYの条件</h3>
+              <p>Download完了 + Runtime初期化 + choice実推論成功。</p>
+            </div>
+          </div>
+          <a class="button" href="./model.html">実機で確認する</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="kicker">05 / ADK 2 LAB</p>
       <h2>Google ADK 2 × Laya</h2>
       <p class="body-copy">ADK 2のWorkflow RuntimeにLayaをSystem-1 routing nodeとして入れ、choiceの結果を <code>Event(route=...)</code> に変換してSkillへ分岐する実験を追加しました。</p>
       <div class="demo-grid">
