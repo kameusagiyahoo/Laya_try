@@ -15,3 +15,6 @@ button{font:inherit}.shell{width:min(880px,100%);margin:auto;padding:18px 14px 5
 footer{display:flex;justify-content:space-between;gap:15px;padding:18px 3px 0;color:#64748b;font-size:9px;overflow-wrap:anywhere}
 @media(max-width:600px){.card{padding:15px;border-radius:17px}.metrics{grid-template-columns:1fr 1fr}.legend>div{grid-template-columns:14px 80px 1fr}footer{flex-direction:column}}
 @supports(padding:max(0px)){.shell{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));padding-bottom:max(56px,env(safe-area-inset-bottom))}}
+.safe-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.warning strong{color:#fde68a}
+@media(max-width:600px){.safe-actions{grid-template-columns:1fr}}
