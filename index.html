@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>Laya Try — iPhone Browser Lab</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">LAYA TRY / LOCAL DECISION MODEL</p>
+      <h1>iPhoneでLayaを試す</h1>
+      <p class="lead">ブラウザの対応状況を確認し、実際のLaya ONNX / WebGPUデモを起動するための実験ページです。</p>
+      <div class="badges">
+        <span class="badge">322M params</span>
+        <span class="badge">FP16 ≈ 647 MB</span>
+        <span class="badge">Local inference</span>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="kicker">01 / DEVICE CHECK</p>
+          <h2>このブラウザで試せるか</h2>
+        </div>
+        <span id="overall" class="status pending">CHECKING</span>
+      </div>
+
+      <div class="checks">
+        <div class="check">
+          <span>WebGPU API</span>
+          <strong id="webgpu">確認中…</strong>
+        </div>
+        <div class="check">
+          <span>Cache API</span>
+          <strong id="cache">確認中…</strong>
+        </div>
+        <div class="check">
+          <span>Service Worker</span>
+          <strong id="sw">確認中…</strong>
+        </div>
+        <div class="check">
+          <span>Platform</span>
+          <strong id="platform">確認中…</strong>
+        </div>
+      </div>
+
+      <p id="check-note" class="note">WebGPU APIが見えても、ONNX Runtime WebでLayaが最後まで動く保証にはなりません。実デモのロードまで確認してください。</p>
+    </section>
+
+    <section class="card">
+      <p class="kicker">02 / REAL MODEL</p>
+      <h2>実際のLayaを起動</h2>
+      <p class="body-copy">下のボタンは、mizchi氏が公開しているLaya multilingualのONNX / WebGPU実デモを開きます。モデル推論はブラウザ内で実行され、初回のみ大きなモデルを取得します。</p>
+
+      <div class="demo-grid">
+        <article class="demo">
+          <div class="demo-top">
+            <span class="demo-icon">S</span>
+            <div>
+              <h3>Snake</h3>
+              <p>Layaが候補手を評価し、安全シールド付きでSnakeを操作。</p>
+            </div>
+          </div>
+          <a class="button primary" href="https://mizchi-laya-web-demo.static.hf.space/snake.html" target="_blank" rel="noopener">Snakeを実機で試す</a>
+        </article>
+
+        <article class="demo">
+          <div class="demo-top">
+            <span class="demo-icon">C</span>
+            <div>
+              <h3>Chess</h3>
+              <p>候補手の説明をLayaが評価し、ブラウザ内推論で着手。</p>
+            </div>
+          </div>
+          <a class="button" href="https://mizchi-laya-web-demo.static.hf.space/chess.html" target="_blank" rel="noopener">Chessを試す</a>
+        </article>
+      </div>
+
+      <div class="warning">
+        <strong>iPhoneでの確認ポイント</strong>
+        <p>初回ロードは約647 MBのモデル取得があるためWi-Fi推奨です。デモ画面で <code>ENGINE</code> と <code>INFERENCE</code> を確認してください。ロード失敗やタブ再読み込みが起きる場合は、WebGPU実装またはメモリ制約の可能性があります。</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="kicker">03 / TEST RECORD</p>
+      <h2>実機テスト記録</h2>
+      <div class="record-grid">
+        <label>
+          <span>端末</span>
+          <input id="device" value="iPhone 15" />
+        </label>
+        <label>
+          <span>ENGINE</span>
+          <input id="engine" placeholder="例: WebGPU · FP16" />
+        </label>
+        <label>
+          <span>INFERENCE</span>
+          <input id="latency" placeholder="例: 85 ms" />
+        </label>
+        <label>
+          <span>結果</span>
+          <select id="result">
+            <option value="">未測定</option>
+            <option>正常動作</option>
+            <option>ロードは成功・遅い</option>
+            <option>モデルロード失敗</option>
+            <option>WebGPU利用不可</option>
+          </select>
+        </label>
+      </div>
+      <label class="full">
+        <span>メモ</span>
+        <textarea id="memo" rows="3" placeholder="発熱、再読み込み、初回ロード時間など"></textarea>
+      </label>
+      <div class="actions">
+        <button id="save" class="button primary" type="button">この端末に保存</button>
+        <button id="clear" class="button ghost" type="button">記録を消す</button>
+      </div>
+      <p id="saved" class="note"></p>
+    </section>
+
+    <section class="card compact">
+      <p class="kicker">NEXT</p>
+      <h2>次の段階</h2>
+      <p class="body-copy">このブラウザ実験でiPhone上の可否と速度を測った後、必要なら「状態 + choice / score / yes-no」を自由入力できるLaya Decision Labへ拡張します。</p>
+      <div class="links">
+        <a href="https://zenn.dev/mizchi/articles/laya-mlx-60fps" target="_blank" rel="noopener">元記事</a>
+        <a href="https://huggingface.co/mizchi/laya-multilingual-onnx" target="_blank" rel="noopener">ONNX model</a>
+        <a href="https://github.com/mizorewww/laya-mlx" target="_blank" rel="noopener">laya-mlx</a>
+      </div>
+    </section>
+
+    <footer>
+      <span>Laya_try</span>
+      <span>Model is fetched from the original public demo; this repository does not host the model weights.</span>
+    </footer>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
