@@ -124,10 +124,38 @@
       <p id="saved" class="note"></p>
     </section>
 
+    <section class="card">
+      <p class="kicker">04 / ADK 2 LAB</p>
+      <h2>Google ADK 2 × Laya</h2>
+      <p class="body-copy">ADK 2のWorkflow RuntimeにLayaをSystem-1 routing nodeとして入れ、choiceの結果を <code>Event(route=...)</code> に変換してSkillへ分岐する実験を追加しました。</p>
+      <div class="demo-grid">
+        <article class="demo">
+          <div class="demo-top">
+            <span class="demo-icon">A</span>
+            <div>
+              <h3>Interactive Workflow</h3>
+              <p>Planner → Laya → Skillのgraphとtraceをスマホで操作して確認できます。</p>
+            </div>
+          </div>
+          <a class="button primary" href="./adk.html">ADK 2 Labを開く</a>
+        </article>
+        <article class="demo">
+          <div class="demo-top">
+            <span class="demo-icon">Py</span>
+            <div>
+              <h3>Runnable Backend</h3>
+              <p>実際のGoogle ADK 2 + Layaローカルworkflowもbackend/に追加済みです。</p>
+            </div>
+          </div>
+          <a class="button" href="https://github.com/kameusagiyahoo/Laya_try/tree/main/backend" target="_blank" rel="noopener">実装を見る</a>
+        </article>
+      </div>
+    </section>
+
     <section class="card compact">
       <p class="kicker">NEXT</p>
       <h2>次の段階</h2>
-      <p class="body-copy">このブラウザ実験でiPhone上の可否と速度を測った後、必要なら「状態 + choice / score / yes-no」を自由入力できるLaya Decision Labへ拡張します。</p>
+      <p class="body-copy">Browser版LayaをDecision UIへ直接接続し、100回連続推論のmean / p50 / p95を自動測定。その後、ADK実ランタイムのtraceと接続します。</p>
       <div class="links">
         <a href="https://zenn.dev/mizchi/articles/laya-mlx-60fps" target="_blank" rel="noopener">元記事</a>
         <a href="https://huggingface.co/mizchi/laya-multilingual-onnx" target="_blank" rel="noopener">ONNX model</a>
