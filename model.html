@@ -54,6 +54,17 @@
         <span id="phase" class="status idle">IDLE</span>
       </div>
 
+      <div id="iphone-safe" class="warning hidden">
+        <strong>iPhone Safe Mode</strong><br />
+        iPhone Safariでは約900MB版のダウンロード後、ONNXセッション生成時にタブが落ちることがあります。
+        このページでは重いモデルを自動実行せず、まず約290MBのq4e8版をWASMで検証する経路を推奨します。
+        <div class="safe-actions">
+          <a class="button primary" href="https://vishalmysore.github.io/layaForWeb/" target="_blank" rel="noopener">軽量Layaデモを開く</a>
+          <button id="force-heavy" class="button ghost" type="button">900MB版を強制実行</button>
+        </div>
+        <p class="note">軽量デモでは build を <b>q4e8 (~290 MB)</b>、backend を <b>WASM</b> にしてください。iOS SafariではONNX Runtime WebのWebGPUは公式サポート対象外です。</p>
+      </div>
+
       <div class="progress-wrap">
         <div class="progress"><i id="bar"></i></div>
         <div class="progress-meta">
