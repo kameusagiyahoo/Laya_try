@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#08111d" />
+  <title>Laya Try — ADK 2 Lab</title>
+  <link rel="stylesheet" href="./adk.css" />
+</head>
+<body>
+  <main class="shell">
+    <nav class="topbar">
+      <a href="./">← Browser Lab</a>
+      <span>ADK 2 LAB</span>
+    </nav>
+
+    <header class="hero">
+      <p class="eyebrow">GOOGLE ADK 2 × LAYA</p>
+      <h1>System 1 Router Lab</h1>
+      <p class="lead">
+        ADK 2.0のgraph workflowにLayaをrouting nodeとして挿入し、
+        typed decisionでSkillへ分岐する構成をスマホ上で確認します。
+      </p>
+      <div class="badges">
+        <span class="badge good">ADK 2.x</span>
+        <span class="badge">Workflow Runtime</span>
+        <span class="badge">Laya choice / score / noul</span>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="kicker">01 / ARCHITECTURE</p>
+          <h2>Planner → Laya → Skill</h2>
+        </div>
+        <span class="status">GRAPH</span>
+      </div>
+
+      <div class="graph" aria-label="ADK 2 workflow">
+        <div class="node node-input" data-node="input">
+          <small>START</small>
+          <strong>Ticket / State</strong>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="node" data-node="planner">
+          <small>OPTIONAL</small>
+          <strong>Planner / Normalizer</strong>
+          <span>stateを整理</span>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="node node-laya" data-node="laya">
+          <small>SYSTEM 1</small>
+          <strong>Laya Decision Node</strong>
+          <span>choice + score + noul</span>
+        </div>
+        <div class="arrow">↓ Event(route=...)</div>
+        <div class="branches">
+          <div class="node small" data-node="billing"><strong>Billing</strong><span>Skill</span></div>
+          <div class="node small" data-node="technical"><strong>Technical</strong><span>Skill</span></div>
+          <div class="node small" data-node="sales"><strong>Sales</strong><span>Skill</span></div>
+          <div class="node small" data-node="human"><strong>Human</strong><span>Fallback</span></div>
+        </div>
+      </div>
+
+      <p class="note">
+        実PythonコードではLayaの<code>choice</code>をADK 2の<code>Event(route=...)</code>へ直接変換します。
+        低confidence時はHumanへfallbackする設計です。
+      </p>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="kicker">02 / INTERACTIVE TRACE</p>
+          <h2>ルーティングを試す</h2>
+        </div>
+        <span class="status sim">SIMULATED UI</span>
+      </div>
+
+      <div class="preset-row">
+        <button class="chip active" data-preset="billing">二重請求</button>
+        <button class="chip" data-preset="technical">障害</button>
+        <button class="chip" data-preset="sales">料金相談</button>
+        <button class="chip" data-preset="ambiguous">曖昧</button>
+      </div>
+
+      <label class="field">
+        <span>State / Ticket</span>
+        <textarea id="ticket" rows="6"></textarea>
+      </label>
+
+      <div class="question-box">
+        <div>
+          <span class="qtype">CHOICE</span>
+          <strong>どのSkillへ送る？</strong>
+          <code>billing / technical / sales / other</code>
+        </div>
+        <div>
+          <span class="qtype">SCORE</span>
+          <strong>緊急度は？</strong>
+          <code>not urgent → critical</code>
+        </div>
+        <div>
+          <span class="qtype">NOUL</span>
+          <strong>離脱リスクがある？</strong>
+          <code>P(true)</code>
+        </div>
+      </div>
+
+      <button id="run" class="button primary" type="button">Workflowを実行</button>
+
+      <div id="results" class="results hidden">
+        <div class="result-head">
+          <div>
+            <span class="mini">ROUTE</span>
+            <strong id="route">—</strong>
+          </div>
+          <div>
+            <span class="mini">CONFIDENCE</span>
+            <strong id="confidence">—</strong>
+          </div>
+          <div>
+            <span class="mini">URGENCY</span>
+            <strong id="urgency">—</strong>
+          </div>
+          <div>
+            <span class="mini">CHURN</span>
+            <strong id="churn">—</strong>
+          </div>
+        </div>
+
+        <div class="probabilities">
+          <div class="prob"><span>billing</span><div><i id="p-billing"></i></div><b id="v-billing"></b></div>
+          <div class="prob"><span>technical</span><div><i id="p-technical"></i></div><b id="v-technical"></b></div>
+          <div class="prob"><span>sales</span><div><i id="p-sales"></i></div><b id="v-sales"></b></div>
+          <div class="prob"><span>other</span><div><i id="p-other"></i></div><b id="v-other"></b></div>
+        </div>
+
+        <div class="trace">
+          <p class="kicker">ADK TRACE</p>
+          <ol id="trace"></ol>
+        </div>
+      </div>
+
+      <p class="note">
+        このページの判定値はUI/フロー確認用のシミュレーションです。実Laya推論値ではありません。
+        実モデルはBrowser Labまたは<code>backend/adk_laya</code>で実行します。
+      </p>
+    </section>
+
+    <section class="card">
+      <p class="kicker">03 / REAL IMPLEMENTATION</p>
+      <h2>リポジトリ内の実装</h2>
+      <div class="impl-grid">
+        <article>
+          <strong>ADK 2 Workflow</strong>
+          <p><code>backend/adk_laya/agent.py</code></p>
+          <span>Google ADK 2のWorkflow graphを使用。</span>
+        </article>
+        <article>
+          <strong>Laya Router</strong>
+          <p><code>Router(preload=False)</code></p>
+          <span>モデルは初回predict時にローカルロード。</span>
+        </article>
+        <article>
+          <strong>Confidence fallback</strong>
+          <p><code>&lt; 0.70 → human</code></p>
+          <span>低confidenceを自動処理へ流さない。</span>
+        </article>
+        <article>
+          <strong>No cloud required</strong>
+          <p>ADK orchestration + local Laya</p>
+          <span>サンプルのSkillも決定論的関数。</span>
+        </article>
+      </div>
+      <div class="links">
+        <a href="https://github.com/kameusagiyahoo/Laya_try/tree/main/backend" target="_blank" rel="noopener">backendを見る</a>
+        <a href="https://github.com/google/adk-python/tree/main/contributing/samples/workflows/route" target="_blank" rel="noopener">Google route sample</a>
+        <a href="https://github.com/NandhaKishorM/laya" target="_blank" rel="noopener">Laya</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="kicker">04 / NEXT</p>
+      <h2>次に接続するもの</h2>
+      <div class="next-list">
+        <div><b>1</b><span>Browser版LayaをこのDecision UIへ直接接続</span></div>
+        <div><b>2</b><span>100回benchmark: mean / p50 / p95 / max</span></div>
+        <div><b>3</b><span>ADK traceを実ランタイムから取り込む</span></div>
+        <div><b>4</b><span>PlannerをOpenAI / Gemini / local vLLMから選択可能にする</span></div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Laya_try / ADK 2 Lab</span>
+      <span>Static UI simulation + runnable local backend</span>
+    </footer>
+  </main>
+  <script src="./adk.js"></script>
+</body>
+</html>
