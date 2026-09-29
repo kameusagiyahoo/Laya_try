@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#071019" />
+  <title>Laya Try — Model Diagnostics</title>
+  <link rel="stylesheet" href="./model.css" />
+</head>
+<body>
+  <main class="shell">
+    <nav class="topbar">
+      <a href="./">← Browser Lab</a>
+      <span>MODEL DIAGNOSTICS</span>
+    </nav>
+
+    <header class="hero">
+      <p class="eyebrow">REAL MODEL / CLIENT-SIDE</p>
+      <h1>Layaモデルを本当に読み込めたか確認する</h1>
+      <p class="lead">
+        ページ表示だけでは成功扱いにしません。モデル資産の取得、ランタイム初期化、
+        1回の実推論まで通った時だけ <strong>READY</strong> にします。
+      </p>
+    </header>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="kicker">01 / PRECHECK</p>
+          <h2>端末とブラウザ</h2>
+        </div>
+        <span id="overall" class="status idle">NOT STARTED</span>
+      </div>
+
+      <div class="metrics">
+        <div><span>WebGPU</span><strong id="webgpu">—</strong></div>
+        <div><span>Storage usage</span><strong id="storage-used">—</strong></div>
+        <div><span>Storage quota</span><strong id="storage-quota">—</strong></div>
+        <div><span>Persistent</span><strong id="persistent">—</strong></div>
+      </div>
+
+      <div class="warning">
+        現在の <code>@r4ai/laya-web</code> が想定する公開モデル資産は約900MBです。
+        Wi‑Fi接続と十分な空きストレージを推奨します。
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="kicker">02 / LOAD</p>
+          <h2>実モデルロード</h2>
+        </div>
+        <span id="phase" class="status idle">IDLE</span>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress"><i id="bar"></i></div>
+        <div class="progress-meta">
+          <strong id="progress-label">まだ開始していません</strong>
+          <span id="progress-bytes">0 MB</span>
+        </div>
+      </div>
+
+      <div id="asset-list" class="assets"></div>
+
+      <button id="load" class="button primary" type="button">モデルを読み込んで実推論する</button>
+      <button id="cancel" class="button ghost hidden" type="button">中止</button>
+
+      <p class="note">
+        モデルはこのGitHubリポジトリには保存せず、公開Laya Webモデルから取得します。
+        入力テキストと推論はブラウザ内で処理します。
+      </p>
+    </section>
+
+    <section id="smoke-card" class="card muted">
+      <div class="section-head">
+        <div>
+          <p class="kicker">03 / SMOKE TEST</p>
+          <h2>1回の実推論</h2>
+        </div>
+        <span id="smoke-status" class="status idle">WAITING</span>
+      </div>
+
+      <div class="test-input">
+        <span>Input</span>
+        <p id="smoke-input">「二重請求されています。返金してください。」</p>
+      </div>
+
+      <div class="metrics">
+        <div><span>Backend</span><strong id="backend">—</strong></div>
+        <div><span>Inference</span><strong id="elapsed">—</strong></div>
+        <div><span>Choice</span><strong id="choice">—</strong></div>
+        <div><span>Confidence</span><strong id="confidence">—</strong></div>
+      </div>
+
+      <div id="probabilities" class="probabilities"></div>
+    </section>
+
+    <section class="card">
+      <p class="kicker">04 / DIAGNOSTIC LOG</p>
+      <h2>どこまで進んだか</h2>
+      <ol id="log" class="log"></ol>
+      <button id="copy-log" class="button ghost" type="button">ログをコピー</button>
+    </section>
+
+    <section class="card compact">
+      <p class="kicker">INTERPRETATION</p>
+      <h2>成功判定</h2>
+      <div class="legend">
+        <div><span class="dot downloading"></span><b>DOWNLOADING</b><p>モデル資産取得中。まだ成功ではありません。</p></div>
+        <div><span class="dot initializing"></span><b>INITIALIZING</b><p>ONNX Runtime / WebGPUセッション準備中。</p></div>
+        <div><span class="dot ready"></span><b>READY</b><p>モデルロード + 実推論の両方が成功。</p></div>
+        <div><span class="dot error"></span><b>ERROR</b><p>ログ末尾の段階で失敗。</p></div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Laya_try / Model Diagnostics</span>
+      <span id="model-url"></span>
+    </footer>
+  </main>
+  <script type="module" src="./model.js"></script>
+</body>
+</html>
