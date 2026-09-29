@@ -3,6 +3,9 @@ const WASM_URL = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
 const $ = (id) => document.getElementById(id);
 let worker;
 let aggregate = new Map();
+const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let heavyAllowed = !isIOS;
 
 $("model-url").textContent = MODEL_URL;
 
@@ -31,7 +34,17 @@ function log(text, detail, ok = true) {
 }
 
 async function precheck() {
-  $("webgpu").textContent = navigator.gpu ? "利用可能" : "見つかりません";
+  if (isIOS) {
+    $("webgpu").textContent = navigator.gpu
+      ? "APIあり / ORT WebGPU非対応"
+      : "ORT WebGPU非対応";
+    $("iphone-safe").classList.remove("hidden");
+    $("load").disabled = true;
+    $("load").textContent = "iPhoneでは900MB版を停止中";
+    log("iPhone Safe Mode", "重い約900MBモデルの自動ロードを停止。q4e8/WASMを推奨。");
+  } else {
+    $("webgpu").textContent = navigator.gpu ? "利用可能" : "見つかりません";
+  }
   try {
     if (navigator.storage?.estimate) {
       const {usage, quota} = await navigator.storage.estimate();
@@ -112,7 +125,19 @@ $("copy-log").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(text); } catch {}
 });
 
+$("force-heavy")?.addEventListener("click", () => {
+  heavyAllowed = true;
+  $("load").disabled = false;
+  $("load").textContent = "900MB版を強制実行";
+  log("Heavy model override", "iPhoneでのタブ強制終了リスクを理解した上で有効化。");
+});
+
 $("load").addEventListener("click", () => {
+  if (!heavyAllowed) {
+    setStatus("overall", "SAFE MODE", "initializing");
+    log("900MB版を停止", "iPhoneでは軽量q4e8/WASMから検証してください。", false);
+    return;
+  }
   reset();
   $("load").disabled = true;
   $("cancel").classList.remove("hidden");
