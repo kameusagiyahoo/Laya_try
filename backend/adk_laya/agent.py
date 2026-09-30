@@ -23,14 +23,22 @@ from typing import Any
 
 from google.adk import Event
 from google.adk import Workflow
+from google.adk.workflow import START
 from laya import Router
+import torch
+
+from server.config import Settings
 
 
-CONFIDENCE_THRESHOLD = 0.70
+SETTINGS = Settings.from_env()
+CONFIDENCE_THRESHOLD = SETTINGS.confidence_threshold
 
-# Lazy loading keeps import/startup light. The checkpoint is downloaded/loaded
-# on the first predict call.
-laya_router = Router(preload=False)
+# ADK CLI is a separate process from FastAPI, so it owns one CPU-only Router.
+# Preloading prevents model load time from contaminating normal workflow latency.
+torch.set_num_threads(SETTINGS.threads)
+laya_router = Router(device=SETTINGS.device, max_loaded=SETTINGS.max_loaded)
+if SETTINGS.preload:
+    laya_router.preload([SETTINGS.model])
 
 QUESTIONS: dict[str, dict[str, Any]] = {
     "department": {
@@ -71,7 +79,7 @@ def _confidence(answer: dict[str, Any]) -> float:
 def laya_route(node_input: str):
     """Use local Laya as the System-1 routing node."""
     state = {"ticket": node_input}
-    result = laya_router.predict(state, QUESTIONS)
+    result = laya_router.predict(state, QUESTIONS, model=SETTINGS.model)
 
     department = result["answers"]["department"]
     choice = str(department["choice"])
@@ -116,7 +124,7 @@ def human_fallback():
 root_agent = Workflow(
     name="laya_adk_router",
     edges=[
-        ("START", laya_route),
+        (START, laya_route),
         (
             laya_route,
             {
