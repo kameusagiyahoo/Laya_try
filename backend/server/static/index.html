@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#08111d">
   <title>Laya Try — Server Mode</title>
-  <link rel="stylesheet" href="/static/server.css?v=4">
+  <link rel="stylesheet" href="/static/server.css?v=5">
 </head>
 <body>
   <main class="shell">
@@ -75,16 +75,21 @@
       <button id="run" class="button primary">この文章を判定する</button>
       <p id="decision-error" class="error"></p>
       <div id="decision-results" class="results hidden">
-        <div class="metrics three">
-          <div><small>CHOICE</small><strong id="choice">—</strong></div>
-          <div><small>CONFIDENCE</small><strong id="confidence">—</strong></div>
-          <div><small>INFERENCE</small><strong id="inference">—</strong></div>
+        <section class="result-hero">
+          <p class="result-label">判定結果</p>
+          <strong id="primary-result" class="primary-result">—</strong>
+          <span id="primary-id" class="primary-id">—</span>
+          <div class="result-meta">
+            <div><small>確信度</small><b id="confidence">—</b></div>
+            <div><small>推論時間</small><b id="inference">—</b></div>
+          </div>
+        </section>
+        <div class="result-section-head">
+          <strong>判定の内訳</strong>
+          <small>質問ごとの結果</small>
         </div>
-        <div id="probabilities" class="probabilities"></div>
-        <div>
-          <p class="result-label">ALL ANSWERS</p>
-          <div id="answers" class="answer-list"></div>
-        </div>
+        <div id="answers" class="answer-list visual-answers"></div>
+        <details class="raw-result"><summary>開発者向けJSON</summary><code id="raw-result"></code></details>
       </div>
     </section>
 
@@ -112,6 +117,6 @@
 
     <footer>Server Mode · CPU-only · Tailscale private access</footer>
   </main>
-  <script src="/static/server.js?v=4"></script>
+  <script src="/static/server.js?v=5"></script>
 </body>
 </html>

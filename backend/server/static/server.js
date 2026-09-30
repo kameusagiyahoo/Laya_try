@@ -156,39 +156,65 @@
     if (!Object.keys(questions).length) throw new Error("判定項目を1つ以上ONにしてください");
     return {state: $("state").value, questions};
   }
-  function showDecision(data) {
-    const department = data.answers?.department || {};
-    $("choice").textContent = department.choice ?? "—";
-    $("confidence").textContent = `${(Number(data.confidence) * 100).toFixed(1)}%`;
-    $("inference").textContent = ms(data.inference_ms);
-    const probabilities = department.probabilities || data.probabilities?.department || {};
-    const wrap = $("probabilities"); wrap.replaceChildren();
-    Object.entries(probabilities).sort((a,b) => b[1]-a[1]).forEach(([name,value]) => {
+  function percent(value) { return `${(Number(value) * 100).toFixed(1)}%`; }
+  function probabilityRows(probabilities, labels = {}) {
+    const wrap = document.createElement("div"); wrap.className = "probabilities";
+    Object.entries(probabilities || {}).sort((a,b) => b[1] - a[1]).forEach(([name, value]) => {
       const row = document.createElement("div"); row.className = "prob";
-      const label = document.createElement("span"); label.textContent = name;
-      const bar = document.createElement("div"); bar.className = "bar"; const fill = document.createElement("i"); fill.style.width = `${Math.max(0, Math.min(100, value*100))}%`; bar.append(fill);
-      const amount = document.createElement("b"); amount.textContent = `${(value*100).toFixed(1)}%`;
-      row.append(label,bar,amount); wrap.append(row);
+      const label = document.createElement("span"); label.textContent = labels[name] || name;
+      const bar = document.createElement("div"); bar.className = "bar"; const fill = document.createElement("i"); fill.style.width = `${Math.max(0, Math.min(100, value * 100))}%`; bar.append(fill);
+      const amount = document.createElement("b"); amount.textContent = percent(value);
+      row.append(label, bar, amount); wrap.append(row);
     });
+    return wrap;
+  }
+  function visualAnswer(name, answer, question) {
+    const card = document.createElement("article"); card.className = `answer-card answer-${answer.type || "unknown"}`;
+    const head = document.createElement("div"); head.className = "answer-head";
+    const heading = document.createElement("div");
+    const title = document.createElement("b"); title.textContent = question?.instructions || name;
+    const type = document.createElement("small"); type.textContent = `${name} · ${answer.type || "answer"}`;
+    heading.append(title, type); head.append(heading); card.append(head);
+
+    if (answer.type === "choice") {
+      const labels = question?.criteria || {};
+      const result = document.createElement("strong"); result.className = "answer-main"; result.textContent = labels[answer.choice] || answer.choice;
+      const id = document.createElement("span"); id.className = "answer-id"; id.textContent = answer.choice;
+      const confidence = document.createElement("span"); confidence.className = "confidence-badge"; confidence.textContent = `確信度 ${percent(answer.answer_confidence ?? answer.confidence)}`;
+      card.append(result, id, confidence, probabilityRows(answer.probabilities, labels));
+    } else if (answer.type === "score") {
+      const levels = Object.keys(answer.legend || {}).map(Number).filter(Number.isFinite);
+      const maximum = levels.length ? Math.max(...levels) : 1;
+      const score = Math.max(0, Number(answer.score));
+      const result = document.createElement("strong"); result.className = "answer-main"; result.textContent = `${score.toFixed(2)} / ${maximum}`;
+      const gauge = document.createElement("div"); gauge.className = "score-gauge"; const fill = document.createElement("i"); fill.style.width = `${Math.min(100, score / Math.max(1, maximum) * 100)}%`; gauge.append(fill);
+      card.append(result, gauge, probabilityRows(answer.probabilities, answer.legend || {}));
+    } else {
+      const value = Number(answer.noul ?? answer.probability ?? 0);
+      const result = document.createElement("strong"); result.className = "answer-main"; result.textContent = percent(value);
+      const caption = document.createElement("span"); caption.className = "answer-caption"; caption.textContent = value >= .7 ? "該当する可能性が高い" : value >= .4 ? "判断が分かれる" : "該当する可能性が低い";
+      const gauge = document.createElement("div"); gauge.className = "score-gauge noul-gauge"; const fill = document.createElement("i"); fill.style.width = `${Math.min(100, value * 100)}%`; gauge.append(fill);
+      const ends = document.createElement("div"); ends.className = "gauge-ends"; const no = document.createElement("span"); no.textContent = "該当しない"; const yes = document.createElement("span"); yes.textContent = "該当する"; ends.append(no, yes);
+      card.append(result, caption, gauge, ends);
+    }
+    return card;
+  }
+  function showDecision(data, questions) {
+    const department = data.answers?.department || {};
+    const departmentLabels = questions?.department?.criteria || {};
+    $("primary-result").textContent = departmentLabels[department.choice] || department.choice || "判定なし";
+    $("primary-id").textContent = department.choice || "—";
+    $("confidence").textContent = percent(data.confidence);
+    $("inference").textContent = ms(data.inference_ms);
     const answerList = $("answers"); answerList.replaceChildren();
-    Object.entries(data.answers || {}).forEach(([name, answer]) => {
-      const card = document.createElement("article"); card.className = "answer-card";
-      const title = document.createElement("b"); title.textContent = name;
-      const summary = document.createElement("strong"); summary.className = "answer-summary";
-      if (answer.type === "choice") summary.textContent = `${answer.choice} · ${(Number(answer.answer_confidence ?? answer.confidence) * 100).toFixed(1)}%`;
-      else if (answer.type === "score") {
-        const levels = Object.keys(answer.legend || {}).map(Number).filter(Number.isFinite);
-        summary.textContent = `${Number(answer.score).toFixed(2)} / ${levels.length ? Math.max(...levels) : "—"}`;
-      } else summary.textContent = `${(Number(answer.noul ?? answer.probability) * 100).toFixed(1)}%`;
-      const details = document.createElement("details"); const detailsTitle = document.createElement("summary"); detailsTitle.textContent = "詳細を見る";
-      const value = document.createElement("code"); value.textContent = JSON.stringify(answer, null, 2);
-      details.append(detailsTitle, value); card.append(title, summary, details); answerList.append(card);
-    });
+    Object.entries(data.answers || {}).forEach(([name, answer]) => answerList.append(visualAnswer(name, answer, questions?.[name])));
+    $("raw-result").textContent = JSON.stringify(data, null, 2);
     $("decision-results").classList.remove("hidden");
+    $("decision-results").scrollIntoView({behavior:"smooth", block:"start"});
   }
   $("run").addEventListener("click", async () => {
     $("decision-error").textContent = ""; busy($("run"), true);
-    try { showDecision(await api("/api/predict", requestBody())); }
+    try { const request = requestBody(); showDecision(await api("/api/predict", request), request.questions); }
     catch (error) { $("decision-error").textContent = error.message; }
     finally { busy($("run"), false); }
   });
