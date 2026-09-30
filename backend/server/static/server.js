@@ -95,7 +95,16 @@
     if (type === "noul") {
       const help = document.createElement("p"); help.className = "editor-help"; help.textContent = "0（該当しない）〜1（該当する）の確率で回答します。選択肢の設定は不要です。"; editor.append(help); syncCriteria(card); return;
     }
-    const title = document.createElement("span"); title.className = "editor-title"; title.textContent = type === "choice" ? "選択肢" : "評価の段階（上ほど数値が大きくなります）"; editor.append(title);
+    const title = document.createElement("span"); title.className = "editor-title"; title.textContent = type === "choice" ? "選択肢の説明" : "評価の段階（上ほど数値が大きくなります）"; editor.append(title);
+    if (type === "choice") {
+      const help = document.createElement("p"); help.className = "editor-help choice-help"; help.textContent = "通常は日本語の説明だけ変更すれば使えます。";
+      const advanced = document.createElement("button"); advanced.type = "button"; advanced.className = "advanced-toggle";
+      const updateAdvancedLabel = () => { advanced.textContent = card.classList.contains("show-advanced") ? "詳細設定を閉じる" : "詳細設定：選択肢ID"; };
+      advanced.addEventListener("click", () => { card.classList.toggle("show-advanced"); updateAdvancedLabel(); });
+      updateAdvancedLabel(); editor.append(help, advanced);
+    } else {
+      card.classList.remove("show-advanced");
+    }
     const saved = parseCriteria(card);
     const entries = type === "choice"
       ? (Array.isArray(saved) ? saved.map((value, index) => [`option_${index + 1}`, value]) : Object.entries(saved))
@@ -122,6 +131,7 @@
       card.querySelector(".qtype").value = saved.type;
       card.querySelector(".instructions").value = saved.instructions;
       card.querySelector(".criteria").value = saved.criteria;
+      card.classList.remove("show-advanced");
       renderCriteria(card);
     });
   });

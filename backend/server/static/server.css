@@ -86,6 +86,11 @@ footer{text-align:center;color:var(--muted);padding:24px 0;font-size:12px}
 .remove-option{width:34px;height:34px;border:1px solid #493744;background:#211724;color:var(--red);border-radius:9px;font-size:18px}
 .add-option{justify-self:start;padding-left:0}
 .editor-help{margin:8px 0 0;color:var(--muted);font-size:12px}
+.choice-help{margin:0}
+.advanced-toggle{justify-self:start;border:1px solid #31475e;background:#0d1d2c;color:var(--muted);border-radius:9px;padding:7px 10px;font-size:11px}
+.question:not(.show-advanced) .criteria-row:has(.option-key){grid-template-columns:1fr 34px}
+.question:not(.show-advanced) .option-key{display:none}
+.question.show-advanced .option-key{border-color:#4a6682;background:#102438}
 .question .criteria{display:none!important}
 
 @media(max-width:420px){
