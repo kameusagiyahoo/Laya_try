@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
 from .inference import InferenceBackend, LayaBackend, enrich_result
-from .routing import DEFAULT_ROUTE_QUESTION, build_trace
+from .routing import DEFAULT_ROUTE_QUESTION
 from .schemas import AdkRunRequest, BenchmarkRequest, PredictRequest
 
 
@@ -56,6 +56,10 @@ def create_app(
             raw = await asyncio.to_thread(backend.predict, state, questions)
             elapsed = (time.perf_counter() - started) * 1000
         return enrich_result(raw, settings, elapsed)
+
+    from .adk_runtime import AdkRuntime
+
+    adk_runtime = AdkRuntime(infer, settings.confidence_threshold)
 
     @app.get("/", include_in_schema=False)
     async def ui() -> FileResponse:
@@ -112,7 +116,6 @@ def create_app(
     @app.post("/api/adk/run", dependencies=[Depends(authorize)])
     async def adk_run(request: AdkRunRequest) -> dict[str, Any]:
         questions = request.questions or DEFAULT_ROUTE_QUESTION
-        result = await infer(request.state, questions)
-        return build_trace(request.state, result, settings.confidence_threshold)
+        return await adk_runtime.run(request.state, questions)
 
     return app

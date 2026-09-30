@@ -196,7 +196,9 @@ Laya choice + confidence
                                                 └─ selected Skill
 ```
 
-Web UIのADK 2 Traceと `POST /api/adk/run` は `Input → Laya → Event(route) → selected Skill → result` をJSONで返します。ADK developer CLIを単独で試す場合:
+Web UIのADK 2 Traceと `POST /api/adk/run` は、Google ADK 2の `InMemoryRunner` で実Workflowを実行し、`Input → Laya → Event(route) → selected Skill → result` をJSONで返します。FastAPIとWorkflowは同じ常駐Laya Routerを共有するため、モデルを二重ロードしません。レスポンスの `adk_events` では実際に実行されたnode pathとrouteも確認できます。
+
+ADK developer CLIを単独で試す場合:
 
 ```bash
 cd backend
