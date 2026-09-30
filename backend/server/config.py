@@ -33,6 +33,7 @@ class Settings:
     preload: bool = True
     threads: int = 4
     max_loaded: int = 1
+    max_concurrent: int = 4
     confidence_threshold: float = 0.70
     api_key: str | None = None
     host: str = "127.0.0.1"
@@ -48,6 +49,7 @@ class Settings:
             preload=_bool_env("LAYA_PRELOAD", True),
             threads=_int_env("LAYA_THREADS", 4),
             max_loaded=_int_env("LAYA_MAX_LOADED", 1),
+            max_concurrent=_int_env("LAYA_MAX_CONCURRENT", 4),
             confidence_threshold=min(1.0, max(0.0, _float_env("LAYA_CONFIDENCE_THRESHOLD", 0.70))),
             api_key=os.getenv("LAYA_API_KEY") or None,
             host=os.getenv("LAYA_HOST", "127.0.0.1"),

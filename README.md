@@ -55,6 +55,7 @@ LAYA_MODELS=multilingual
 LAYA_PRELOAD=1
 LAYA_THREADS=4
 LAYA_MAX_LOADED=1
+LAYA_MAX_CONCURRENT=4
 LAYA_CONFIDENCE_THRESHOLD=0.70
 LAYA_HOST=127.0.0.1
 LAYA_PORT=8000
@@ -67,6 +68,8 @@ lscpu | grep -E 'Core\(s\) per socket|Socket\(s\)'
 ```
 
 `LAYA_MODELS=multilingual` と `LAYA_MAX_LOADED=1` により、日本語対応checkpointだけを常駐させ、リクエスト間のモデル切替・再ロードを避けます。
+
+CPU推論は1件ずつ実行します。`LAYA_MAX_CONCURRENT` は実行中と待機中を合わせた受付上限で、既定値は4です。上限を超えたリクエストには `Retry-After: 1` 付きのHTTP `503` を返し、待ち行列によるメモリ増加を防ぎます。
 
 `scripts/start.sh` はPyTorchのCPU wheelを明示してから依存関係を導入します。CPU-only Ubuntuへ不要なCUDA runtimeをダウンロードしません。
 
@@ -217,6 +220,7 @@ cd backend
 - iPhoneから開けない: 両端末が同じtailnetか、iPhoneのTailscale VPNが有効か、`tailscale serve status` を確認します。
 - `401`: `.env` の `LAYA_API_KEY` とBearer Token欄の値を一致させます。
 - `422`: `state`、`questions`、各質問の `type / instructions / criteria` を確認します。
+- `503`: CPU推論の受付上限です。1秒以上待って再試行するか、`.env` の `LAYA_MAX_CONCURRENT` をPCのRAMと用途に応じて調整します。
 - メモリ不足: multilingual以外を `LAYA_MODELS` へ追加せず、`LAYA_MAX_LOADED=1` を維持します。
 
 ### Tests

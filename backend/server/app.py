@@ -32,6 +32,8 @@ def create_app(
     settings = settings or Settings.from_env()
     backend = backend or LayaBackend(settings)
     inference_lock = asyncio.Lock()
+    admission_lock = asyncio.Lock()
+    admitted_requests = 0
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -57,6 +59,23 @@ def create_app(
             elapsed = (time.perf_counter() - started) * 1000
         return enrich_result(raw, settings, elapsed)
 
+    @asynccontextmanager
+    async def admission_slot():
+        nonlocal admitted_requests
+        async with admission_lock:
+            if admitted_requests >= settings.max_concurrent:
+                raise HTTPException(
+                    status_code=503,
+                    detail="server is busy; retry shortly",
+                    headers={"Retry-After": "1"},
+                )
+            admitted_requests += 1
+        try:
+            yield
+        finally:
+            async with admission_lock:
+                admitted_requests -= 1
+
     from .adk_runtime import AdkRuntime
 
     adk_runtime = AdkRuntime(infer, settings.confidence_threshold)
@@ -73,49 +92,53 @@ def create_app(
             "device": settings.device,
             "preloaded": settings.preload and backend.ready,
             "threads": settings.threads,
+            "max_concurrent": settings.max_concurrent,
         }
 
     @app.post("/api/predict", dependencies=[Depends(authorize)])
     @app.post("/v1/systemone", dependencies=[Depends(authorize)])
     async def predict(request: PredictRequest) -> dict[str, Any]:
-        return await infer(request.state, request.questions)
+        async with admission_slot():
+            return await infer(request.state, request.questions)
 
     @app.post("/api/benchmark", dependencies=[Depends(authorize)])
     async def benchmark(request: BenchmarkRequest) -> dict[str, Any]:
-        questions = request.questions or DEFAULT_ROUTE_QUESTION
-        warmup_started = time.perf_counter()
-        try:
-            await infer(request.state, questions)
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail="benchmark warmup failed") from exc
-        warmup_ms = (time.perf_counter() - warmup_started) * 1000
-
-        samples: list[float] = []
-        failures = 0
-        for _ in range(request.iterations):
+        async with admission_slot():
+            questions = request.questions or DEFAULT_ROUTE_QUESTION
+            warmup_started = time.perf_counter()
             try:
-                result = await infer(request.state, questions)
-                samples.append(float(result["inference_ms"]))
-            except Exception:
-                failures += 1
-        if not samples:
-            raise HTTPException(status_code=500, detail="all benchmark iterations failed")
-        return {
-            "warmup_ms": round(warmup_ms, 3),
-            "mean_ms": round(statistics.fmean(samples), 3),
-            "p50_ms": round(_percentile(samples, 0.50), 3),
-            "p95_ms": round(_percentile(samples, 0.95), 3),
-            "min_ms": round(min(samples), 3),
-            "max_ms": round(max(samples), 3),
-            "failures": failures,
-            "iterations": request.iterations,
-            "model": settings.model,
-            "device": settings.device,
-        }
+                await infer(request.state, questions)
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail="benchmark warmup failed") from exc
+            warmup_ms = (time.perf_counter() - warmup_started) * 1000
+
+            samples: list[float] = []
+            failures = 0
+            for _ in range(request.iterations):
+                try:
+                    result = await infer(request.state, questions)
+                    samples.append(float(result["inference_ms"]))
+                except Exception:
+                    failures += 1
+            if not samples:
+                raise HTTPException(status_code=500, detail="all benchmark iterations failed")
+            return {
+                "warmup_ms": round(warmup_ms, 3),
+                "mean_ms": round(statistics.fmean(samples), 3),
+                "p50_ms": round(_percentile(samples, 0.50), 3),
+                "p95_ms": round(_percentile(samples, 0.95), 3),
+                "min_ms": round(min(samples), 3),
+                "max_ms": round(max(samples), 3),
+                "failures": failures,
+                "iterations": request.iterations,
+                "model": settings.model,
+                "device": settings.device,
+            }
 
     @app.post("/api/adk/run", dependencies=[Depends(authorize)])
     async def adk_run(request: AdkRunRequest) -> dict[str, Any]:
-        questions = request.questions or DEFAULT_ROUTE_QUESTION
-        return await adk_runtime.run(request.state, questions)
+        async with admission_slot():
+            questions = request.questions or DEFAULT_ROUTE_QUESTION
+            return await adk_runtime.run(request.state, questions)
 
     return app

@@ -1,8 +1,57 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+MAX_STATE_CHARS = 50_000
+MAX_QUESTIONS = 64
+MAX_QUESTIONS_CHARS = 100_000
+MAX_CRITERIA_PER_QUESTION = 100
+MAX_TOTAL_CRITERIA = 512
+
+
+def _validate_state_size(value: Any) -> Any:
+    size = len(value) if isinstance(value, str) else len(
+        json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    )
+    if size > MAX_STATE_CHARS:
+        raise ValueError(f"state must be at most {MAX_STATE_CHARS} characters")
+    return value
+
+
+def _validate_questions(value: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    if not value:
+        raise ValueError("at least one question is required")
+    if len(value) > MAX_QUESTIONS:
+        raise ValueError(f"at most {MAX_QUESTIONS} questions are allowed")
+    serialized_size = len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+    if serialized_size > MAX_QUESTIONS_CHARS:
+        raise ValueError(f"questions must be at most {MAX_QUESTIONS_CHARS} characters")
+
+    total_criteria = 0
+    for name, question in value.items():
+        kind = question.get("type")
+        if kind not in {"choice", "score", "noul"}:
+            raise ValueError(f"question {name!r} has unsupported type {kind!r}")
+        if not str(question.get("instructions", "")).strip():
+            raise ValueError(f"question {name!r} requires instructions")
+        criteria = question.get("criteria")
+        if kind in {"choice", "score"} and not criteria:
+            raise ValueError(f"question {name!r} requires criteria")
+        if criteria is not None:
+            if not isinstance(criteria, dict):
+                raise ValueError(f"question {name!r} criteria must be an object")
+            if len(criteria) > MAX_CRITERIA_PER_QUESTION:
+                raise ValueError(
+                    f"question {name!r} allows at most {MAX_CRITERIA_PER_QUESTION} criteria"
+                )
+            total_criteria += len(criteria)
+    if total_criteria > MAX_TOTAL_CRITERIA:
+        raise ValueError(f"at most {MAX_TOTAL_CRITERIA} total criteria are allowed")
+    return value
 
 
 class PredictRequest(BaseModel):
@@ -14,33 +63,37 @@ class PredictRequest(BaseModel):
     def state_must_not_be_empty(cls, value: Any) -> Any:
         if value is None or value == "" or value == {} or value == []:
             raise ValueError("state must not be empty")
-        return value
+        return _validate_state_size(value)
 
     @field_validator("questions")
     @classmethod
     def questions_must_be_valid(cls, value: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-        if not value:
-            raise ValueError("at least one question is required")
-        for name, question in value.items():
-            kind = question.get("type")
-            if kind not in {"choice", "score", "noul"}:
-                raise ValueError(f"question {name!r} has unsupported type {kind!r}")
-            if not str(question.get("instructions", "")).strip():
-                raise ValueError(f"question {name!r} requires instructions")
-            if kind in {"choice", "score"} and not question.get("criteria"):
-                raise ValueError(f"question {name!r} requires criteria")
-        return value
+        return _validate_questions(value)
 
 
 class BenchmarkRequest(BaseModel):
     iterations: int = Field(default=100, ge=1, le=1000)
-    state: str = "二重請求されています。返金してください。"
+    state: str = Field(default="二重請求されています。返金してください。", max_length=MAX_STATE_CHARS)
     questions: dict[str, dict[str, Any]] | None = None
+
+    @field_validator("questions")
+    @classmethod
+    def questions_must_be_valid(
+        cls, value: dict[str, dict[str, Any]] | None
+    ) -> dict[str, dict[str, Any]] | None:
+        return _validate_questions(value) if value is not None else None
 
 
 class AdkRunRequest(BaseModel):
-    state: str = Field(min_length=1)
+    state: str = Field(min_length=1, max_length=MAX_STATE_CHARS)
     questions: dict[str, dict[str, Any]] | None = None
+
+    @field_validator("questions")
+    @classmethod
+    def questions_must_be_valid(
+        cls, value: dict[str, dict[str, Any]] | None
+    ) -> dict[str, dict[str, Any]] | None:
+        return _validate_questions(value) if value is not None else None
 
 
 RouteName = Literal["billing", "technical", "sales", "other", "human"]

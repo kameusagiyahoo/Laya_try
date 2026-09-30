@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pytest
@@ -39,6 +41,19 @@ class MockLayaBackend:
         return {"model": "multilingual", "answers": answers}
 
 
+class BlockingMockLayaBackend(MockLayaBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def predict(self, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+        self.started.set()
+        if not self.release.wait(timeout=5):
+            raise TimeoutError("test did not release blocked inference")
+        return super().predict(state, questions)
+
+
 @pytest.fixture
 def questions() -> dict[str, Any]:
     return {
@@ -50,9 +65,13 @@ def questions() -> dict[str, Any]:
     }
 
 
-def make_client(backend: MockLayaBackend | None = None, api_key: str | None = None) -> tuple[TestClient, MockLayaBackend]:
+def make_client(
+    backend: MockLayaBackend | None = None,
+    api_key: str | None = None,
+    max_concurrent: int = 4,
+) -> tuple[TestClient, MockLayaBackend]:
     mock = backend or MockLayaBackend()
-    settings = Settings(api_key=api_key)
+    settings = Settings(api_key=api_key, max_concurrent=max_concurrent)
     return TestClient(create_app(mock, settings)), mock
 
 
@@ -67,6 +86,7 @@ def test_health_reports_cpu_preloaded() -> None:
         "device": "cpu",
         "preloaded": True,
         "threads": 4,
+        "max_concurrent": 4,
     }
 
 
@@ -134,6 +154,43 @@ def test_invalid_predict_input_returns_422(payload: dict[str, Any]) -> None:
     with client:
         response = client.post("/api/predict", json=payload)
     assert response.status_code == 422
+
+
+def test_oversized_predict_input_returns_422(questions: dict[str, Any]) -> None:
+    too_many_options = {
+        "department": {
+            "type": "choice",
+            "instructions": "分類してください",
+            "criteria": {f"option-{index}": "説明" for index in range(101)},
+        }
+    }
+    client, _ = make_client()
+    with client:
+        state_response = client.post(
+            "/api/predict", json={"state": "x" * 50_001, "questions": questions}
+        )
+        options_response = client.post(
+            "/api/predict", json={"state": "test", "questions": too_many_options}
+        )
+    assert state_response.status_code == 422
+    assert options_response.status_code == 422
+
+
+def test_busy_server_returns_retryable_503(questions: dict[str, Any]) -> None:
+    backend = BlockingMockLayaBackend()
+    client, _ = make_client(backend, max_concurrent=1)
+    payload = {"state": "返金", "questions": questions}
+
+    with client, ThreadPoolExecutor(max_workers=1) as executor:
+        first_request = executor.submit(client.post, "/api/predict", json=payload)
+        assert backend.started.wait(timeout=2)
+        busy_response = client.post("/api/predict", json=payload)
+        backend.release.set()
+        first_response = first_request.result(timeout=2)
+
+    assert first_response.status_code == 200
+    assert busy_response.status_code == 503
+    assert busy_response.headers["Retry-After"] == "1"
 
 
 def test_bearer_authentication(questions: dict[str, Any]) -> None:
