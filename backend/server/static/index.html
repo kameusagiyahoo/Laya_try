@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#08111d">
   <title>Laya Try — Server Mode</title>
-  <link rel="stylesheet" href="/static/server.css?v=5">
+  <link rel="stylesheet" href="/static/server.css?v=6">
 </head>
 <body>
   <main class="shell">
@@ -109,14 +109,15 @@
     </section>
 
     <section class="card">
-      <div class="section-head"><div><span class="step">04</span><h2>ADK 2 Trace</h2></div></div>
+      <div class="section-head"><div><span class="step">04</span><h2>ADK 2 Trace</h2></div><span id="adk-runtime" class="runtime-badge hidden">GOOGLE ADK 2</span></div>
       <button id="trace-run" class="button">Run workflow</button>
       <p id="trace-error" class="error"></p>
       <ol id="trace" class="trace"></ol>
+      <div id="adk-events" class="adk-events hidden"></div>
     </section>
 
     <footer>Server Mode · CPU-only · Tailscale private access</footer>
   </main>
-  <script src="/static/server.js?v=5"></script>
+  <script src="/static/server.js?v=6"></script>
 </body>
 </html>

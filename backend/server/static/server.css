@@ -132,3 +132,9 @@ footer{text-align:center;color:var(--muted);padding:24px 0;font-size:12px}
 .gauge-ends{display:flex;justify-content:space-between;color:var(--muted);font-size:10px}
 .raw-result{margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;color:var(--muted);font-size:11px}
 .raw-result code{display:block;white-space:pre-wrap;word-break:break-word;margin-top:10px;max-height:320px;overflow:auto}
+.runtime-badge{color:#071713;background:var(--mint);border-radius:999px;padding:5px 8px;font-size:9px;font-weight:900;letter-spacing:.08em}
+.adk-events{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:11px;background:#091521}
+.adk-events>strong{display:block;font-size:11px;color:var(--muted);margin-bottom:7px}
+.adk-events>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid #1d3043}
+.adk-events code{font-size:10px;word-break:break-all}
+.adk-events span{flex:0 0 auto;color:var(--mint);font-size:9px}

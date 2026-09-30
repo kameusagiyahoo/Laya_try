@@ -233,6 +233,17 @@
       const data = await api("/api/adk/run", {state:$("state").value, questions:requestBody().questions});
       const trace = $("trace"); trace.replaceChildren();
       data.trace.forEach(item => { const li=document.createElement("li"), title=document.createElement("b"), value=document.createElement("code"); title.textContent=item.stage; value.textContent=typeof item.value === "string" ? item.value : JSON.stringify(item.value,null,2); li.append(title,value); trace.append(li); });
+      $("adk-runtime").classList.toggle("hidden", data.runtime !== "google-adk-2");
+      const events = $("adk-events"); events.replaceChildren();
+      if (data.adk_events?.length) {
+        const heading = document.createElement("strong"); heading.textContent = "実行されたADK nodes"; events.append(heading);
+        data.adk_events.forEach(event => {
+          const row = document.createElement("div"); const node = document.createElement("code"); node.textContent = event.node;
+          const route = document.createElement("span"); route.textContent = event.route ? `route: ${event.route}` : "completed";
+          row.append(node, route); events.append(row);
+        });
+        events.classList.remove("hidden");
+      } else events.classList.add("hidden");
     } catch (error) { $("trace-error").textContent = error.message; }
     finally { busy($("trace-run"), false); }
   });
