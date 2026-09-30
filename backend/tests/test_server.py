@@ -128,6 +128,55 @@ def test_adk_routes_choice_to_skill(questions: dict[str, Any]) -> None:
     assert any("technical_skill" in event["node"] for event in body["adk_events"])
 
 
+def test_adk_routes_with_selected_question() -> None:
+    route_questions = {
+        "destination": {
+            "type": "choice",
+            "instructions": "どこへ送るか",
+            "criteria": {"billing": "請求", "technical": "技術", "other": "その他"},
+        }
+    }
+    client, _ = make_client(MockLayaBackend(confidence=0.9, choice="technical"))
+    with client:
+        response = client.post(
+            "/api/adk/run",
+            json={
+                "state": "APIが停止",
+                "questions": route_questions,
+                "route_question": "destination",
+            },
+        )
+    body = response.json()
+    assert response.status_code == 200
+    assert body["route"] == "technical"
+    assert body["trace"][1]["value"]["routing"]["question"] == "destination"
+
+
+def test_adk_rejects_invalid_route_question(questions: dict[str, Any]) -> None:
+    client, _ = make_client()
+    with client:
+        missing = client.post(
+            "/api/adk/run",
+            json={"state": "test", "questions": questions, "route_question": "missing"},
+        )
+        wrong_type = client.post(
+            "/api/adk/run",
+            json={
+                "state": "test",
+                "questions": {
+                    "urgency": {
+                        "type": "score",
+                        "instructions": "緊急度",
+                        "criteria": {"0": "低", "1": "高"},
+                    }
+                },
+                "route_question": "urgency",
+            },
+        )
+    assert missing.status_code == 422
+    assert wrong_type.status_code == 422
+
+
 def test_benchmark_excludes_warmup_and_reports_statistics() -> None:
     client, backend = make_client()
     with client:

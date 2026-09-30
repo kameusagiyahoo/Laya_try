@@ -139,6 +139,6 @@ def create_app(
     async def adk_run(request: AdkRunRequest) -> dict[str, Any]:
         async with admission_slot():
             questions = request.questions or DEFAULT_ROUTE_QUESTION
-            return await adk_runtime.run(request.state, questions)
+            return await adk_runtime.run(request.state, questions, request.route_question)
 
     return app

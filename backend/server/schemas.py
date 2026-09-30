@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 MAX_STATE_CHARS = 50_000
@@ -87,6 +87,7 @@ class BenchmarkRequest(BaseModel):
 class AdkRunRequest(BaseModel):
     state: str = Field(min_length=1, max_length=MAX_STATE_CHARS)
     questions: dict[str, dict[str, Any]] | None = None
+    route_question: str = Field(default="department", min_length=1, max_length=128)
 
     @field_validator("questions")
     @classmethod
@@ -94,6 +95,16 @@ class AdkRunRequest(BaseModel):
         cls, value: dict[str, dict[str, Any]] | None
     ) -> dict[str, dict[str, Any]] | None:
         return _validate_questions(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def route_question_must_be_a_choice(self) -> "AdkRunRequest":
+        questions = self.questions or {"department": {"type": "choice"}}
+        question = questions.get(self.route_question)
+        if question is None:
+            raise ValueError("route_question must reference an enabled question")
+        if question.get("type") != "choice":
+            raise ValueError("route_question must reference a choice question")
+        return self
 
 
 RouteName = Literal["billing", "technical", "sales", "other", "human"]

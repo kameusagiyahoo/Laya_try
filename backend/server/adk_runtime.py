@@ -25,9 +25,13 @@ class AdkRuntime:
         self.runner = InMemoryRunner(node=self.workflow, app_name="laya_server")
 
     def _build_workflow(self) -> Workflow:
-        async def laya_route(node_input: str, questions: dict[str, Any]) -> Event:
+        async def laya_route(
+            node_input: str, questions: dict[str, Any], route_question: str
+        ) -> Event:
             result = await self.infer(node_input, questions)
-            route, choice, confidence = select_route(result, self.confidence_threshold)
+            route, choice, confidence = select_route(
+                result, self.confidence_threshold, route_question
+            )
             return Event(
                 route=route,
                 output={
@@ -36,6 +40,7 @@ class AdkRuntime:
                     "choice": choice,
                     "confidence": confidence,
                     "route": route,
+                    "route_question": route_question,
                 },
                 state={"selected_route": route},
             )
@@ -79,14 +84,16 @@ class AdkRuntime:
             ],
         )
 
-    async def run(self, state: str, questions: dict[str, Any]) -> dict[str, Any]:
+    async def run(
+        self, state: str, questions: dict[str, Any], route_question: str = "department"
+    ) -> dict[str, Any]:
         user_id = "laya-api"
         session_id = uuid.uuid4().hex
         await self.runner.session_service.create_session(
             app_name=self.runner.app_name,
             user_id=user_id,
             session_id=session_id,
-            state={"questions": questions},
+            state={"questions": questions, "route_question": route_question},
         )
         events: list[Event] = []
         try:
@@ -143,7 +150,7 @@ class AdkRuntime:
                     "value": {
                         "answers": laya.get("answers", {}),
                         "routing": {
-                            "question": "department",
+                            "question": output["route_question"],
                             "choice": output["choice"],
                             "confidence": output["confidence"],
                         },

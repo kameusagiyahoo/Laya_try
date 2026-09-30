@@ -30,16 +30,23 @@ SKILL_RESULTS = {
 }
 
 
-def select_route(result: dict[str, Any], threshold: float) -> tuple[str, str, float]:
-    department = (result.get("answers") or {}).get("department") or {}
-    choice = str(department.get("choice", "other"))
-    confidence = _answer_confidence(department)
+def select_route(
+    result: dict[str, Any], threshold: float, question_name: str = "department"
+) -> tuple[str, str, float]:
+    answer = (result.get("answers") or {}).get(question_name) or {}
+    choice = str(answer.get("choice", "other"))
+    confidence = _answer_confidence(answer)
     route = choice if choice in ROUTES and confidence >= threshold else "human"
     return route, choice, confidence
 
 
-def build_trace(state: str, result: dict[str, Any], threshold: float) -> dict[str, Any]:
-    route, choice, confidence = select_route(result, threshold)
+def build_trace(
+    state: str,
+    result: dict[str, Any],
+    threshold: float,
+    question_name: str = "department",
+) -> dict[str, Any]:
+    route, choice, confidence = select_route(result, threshold, question_name)
     return {
         "route": route,
         "selected_skill": f"{route}_skill" if route != "human" else "human_fallback",
@@ -50,7 +57,11 @@ def build_trace(state: str, result: dict[str, Any], threshold: float) -> dict[st
                 "stage": "Laya",
                 "value": {
                     "answers": result.get("answers", {}),
-                    "routing": {"question": "department", "choice": choice, "confidence": confidence},
+                    "routing": {
+                        "question": question_name,
+                        "choice": choice,
+                        "confidence": confidence,
+                    },
                 },
             },
             {"stage": "Event(route)", "value": route},
