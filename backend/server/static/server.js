@@ -58,6 +58,13 @@
       const amount = document.createElement("b"); amount.textContent = `${(value*100).toFixed(1)}%`;
       row.append(label,bar,amount); wrap.append(row);
     });
+    const answerList = $("answers"); answerList.replaceChildren();
+    Object.entries(data.answers || {}).forEach(([name, answer]) => {
+      const card = document.createElement("article"); card.className = "answer-card";
+      const title = document.createElement("b"); title.textContent = name;
+      const value = document.createElement("code"); value.textContent = JSON.stringify(answer, null, 2);
+      card.append(title, value); answerList.append(card);
+    });
     $("decision-results").classList.remove("hidden");
   }
   $("run").addEventListener("click", async () => {

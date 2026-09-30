@@ -46,7 +46,13 @@ def build_trace(state: str, result: dict[str, Any], threshold: float) -> dict[st
         "result": SKILL_RESULTS[route],
         "trace": [
             {"stage": "Input", "value": state},
-            {"stage": "Laya", "value": {"choice": choice, "confidence": confidence}},
+            {
+                "stage": "Laya",
+                "value": {
+                    "answers": result.get("answers", {}),
+                    "routing": {"question": "department", "choice": choice, "confidence": confidence},
+                },
+            },
             {"stage": "Event(route)", "value": route},
             {"stage": "selected Skill", "value": f"{route}_skill" if route != "human" else "human_fallback"},
             {"stage": "result", "value": SKILL_RESULTS[route]},

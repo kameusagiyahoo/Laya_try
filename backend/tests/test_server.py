@@ -101,6 +101,8 @@ def test_adk_routes_choice_to_skill(questions: dict[str, Any]) -> None:
     assert body["route"] == "technical"
     assert body["selected_skill"] == "technical_skill"
     assert [item["stage"] for item in body["trace"]] == ["Input", "Laya", "Event(route)", "selected Skill", "result"]
+    assert body["trace"][1]["value"]["answers"]["department"]["choice"] == "technical"
+    assert body["trace"][1]["value"]["routing"]["question"] == "department"
 
 
 def test_benchmark_excludes_warmup_and_reports_statistics() -> None:
