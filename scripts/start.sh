@@ -23,8 +23,16 @@ fi
 venv_python="$repo_dir/.venv/bin/python"
 if ! "$venv_python" -c 'import fastapi, google.adk, laya, uvicorn' >/dev/null 2>&1; then
   echo "Installing server dependencies ..."
-  "$venv_python" -m pip install --upgrade pip
-  "$venv_python" -m pip install -r backend/requirements.txt
+  if "$venv_python" -m pip --version >/dev/null 2>&1; then
+    "$venv_python" -m pip install --upgrade pip
+    "$venv_python" -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+    "$venv_python" -m pip install -r backend/requirements.txt
+  elif command -v uv >/dev/null 2>&1; then
+    uv pip install --python "$venv_python" --torch-backend cpu -r backend/requirements.txt
+  else
+    echo "ERROR: pip is unavailable in .venv. Install python3-venv or uv." >&2
+    exit 1
+  fi
 fi
 
 if [[ -f .env ]]; then

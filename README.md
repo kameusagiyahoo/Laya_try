@@ -68,6 +68,8 @@ lscpu | grep -E 'Core\(s\) per socket|Socket\(s\)'
 
 `LAYA_MODELS=multilingual` と `LAYA_MAX_LOADED=1` により、日本語対応checkpointだけを常駐させ、リクエスト間のモデル切替・再ロードを避けます。
 
+`scripts/start.sh` はPyTorchのCPU wheelを明示してから依存関係を導入します。CPU-only Ubuntuへ不要なCUDA runtimeをダウンロードしません。
+
 ## 4. First model download
 
 初回の `./scripts/start.sh` は `laya[serve]` をインストールし、Hugging Faceからmultilingual checkpointをダウンロードしてロードします。`LAYA_PRELOAD=1` のため、ロード完了まではhealth checkが `ready` になりません。
