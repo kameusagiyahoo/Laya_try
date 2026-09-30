@@ -74,6 +74,11 @@ footer{text-align:center;color:var(--muted);padding:24px 0;font-size:12px}
 .question-toolbar strong,.question-toolbar small{display:block}
 .question-toolbar small{color:var(--muted);font-size:11px;font-weight:400}
 .text-button,.toggle-edit,.add-option{border:0;background:transparent;color:var(--mint);font:inherit;font-size:12px;font-weight:700;padding:8px}
+.text-button.subdued{color:var(--muted)}
+.question-actions{display:flex;align-items:center;gap:2px}
+.question-targets{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:10px 0 3px;padding:11px;border:1px solid var(--line);border-radius:12px;background:#091521}
+.question-targets .mini-field>span{margin-top:0}
+.route-help{margin:6px 2px 13px}
 .questions{display:grid;gap:10px;margin-bottom:16px}
 .question{display:block;padding:0;border:1px solid var(--line);border-radius:14px;background:#0a1724;overflow:hidden}
 .question:first-child{border-top:1px solid var(--line)}
@@ -84,6 +89,7 @@ footer{text-align:center;color:var(--muted);padding:24px 0;font-size:12px}
 .question-head small{color:var(--muted);font-size:10px;font-weight:400}
 .question-body{display:grid;gap:12px;padding:4px 12px 14px;border-top:1px solid var(--line)}
 .question-body.collapsed{display:none}
+.question-names{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .mini-field{display:block}
 .mini-field>span,.editor-title{display:block;color:var(--muted);font-size:11px;margin:7px 0 5px}
 .criteria-editor{display:grid;gap:8px}
@@ -100,9 +106,13 @@ footer{text-align:center;color:var(--muted);padding:24px 0;font-size:12px}
 .question:not(.show-advanced) .option-key{display:none}
 .question.show-advanced .option-key{border-color:#4a6682;background:#102438}
 .question .criteria{display:none!important}
+.delete-question{justify-self:start;border:1px solid #633b46;background:#25171c;color:var(--red);border-radius:9px;padding:8px 10px;font:inherit;font-size:11px;font-weight:700}
 
 @media(max-width:420px){
   .metrics.three{grid-template-columns:repeat(2,1fr)}
+  .question-toolbar{align-items:flex-start}
+  .question-actions{flex-direction:column;align-items:flex-end}
+  .question-targets,.question-names{grid-template-columns:1fr}
   .criteria-row{grid-template-columns:1fr 34px}
   .criteria-row .option-key{grid-column:1/-1}
   .criteria-row:has(.level-number){grid-template-columns:30px 1fr 34px}

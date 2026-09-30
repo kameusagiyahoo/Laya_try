@@ -90,6 +90,21 @@ def test_health_reports_cpu_preloaded() -> None:
     }
 
 
+def test_ui_serves_dynamic_question_builder() -> None:
+    client, _ = make_client()
+    with client:
+        page = client.get("/")
+        script = client.get("/static/server.js?v=8")
+    assert page.status_code == 200
+    assert 'id="add-question"' in page.text
+    assert 'id="primary-question"' in page.text
+    assert 'id="route-question"' in page.text
+    assert "/static/server.js?v=8" in page.text
+    assert script.status_code == 200
+    assert "route_question:routeQuestion" in script.text
+    assert "laya-decision-config-v1" in script.text
+
+
 def test_predict_has_required_observability_fields(questions: dict[str, Any]) -> None:
     client, _ = make_client()
     with client:
@@ -102,6 +117,26 @@ def test_predict_has_required_observability_fields(questions: dict[str, Any]) ->
     assert body["model"] == "multilingual"
     assert body["device"] == "cpu"
     assert body["inference_ms"] >= 0
+
+
+def test_predict_accepts_score_level_list() -> None:
+    client, _ = make_client()
+    with client:
+        response = client.post(
+            "/api/predict",
+            json={
+                "state": "至急対応してください",
+                "questions": {
+                    "urgency": {
+                        "type": "score",
+                        "instructions": "緊急度はどの程度か",
+                        "criteria": ["急がない", "早めの対応", "緊急"],
+                    }
+                },
+            },
+        )
+    assert response.status_code == 200
+    assert response.json()["answers"]["urgency"]["score"] == pytest.approx(1.5)
 
 
 def test_low_confidence_falls_back_to_human(questions: dict[str, Any]) -> None:

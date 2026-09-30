@@ -42,13 +42,16 @@ def _validate_questions(value: dict[str, dict[str, Any]]) -> dict[str, dict[str,
         if kind in {"choice", "score"} and not criteria:
             raise ValueError(f"question {name!r} requires criteria")
         if criteria is not None:
-            if not isinstance(criteria, dict):
-                raise ValueError(f"question {name!r} criteria must be an object")
-            if len(criteria) > MAX_CRITERIA_PER_QUESTION:
+            if kind == "choice" and not isinstance(criteria, dict):
+                raise ValueError(f"choice question {name!r} criteria must be an object")
+            if kind == "score" and not isinstance(criteria, (dict, list)):
+                raise ValueError(f"score question {name!r} criteria must be an object or array")
+            criteria_count = len(criteria) if isinstance(criteria, (dict, list)) else 0
+            if criteria_count > MAX_CRITERIA_PER_QUESTION:
                 raise ValueError(
                     f"question {name!r} allows at most {MAX_CRITERIA_PER_QUESTION} criteria"
                 )
-            total_criteria += len(criteria)
+            total_criteria += criteria_count
     if total_criteria > MAX_TOTAL_CRITERIA:
         raise ValueError(f"at most {MAX_TOTAL_CRITERIA} total criteria are allowed")
     return value

@@ -119,13 +119,22 @@
   }));
   $("state").addEventListener("input", () => document.querySelectorAll("[data-state-preset]").forEach(item => item.classList.remove("active")));
 
-  const questionDefaults = [...document.querySelectorAll(".question")].map(card => ({
-    id: card.dataset.question,
-    enabled: card.querySelector(".enabled").checked,
-    type: card.querySelector(".qtype").value,
-    instructions: card.querySelector(".instructions").value,
-    criteria: card.querySelector(".criteria").value,
-  }));
+  const CONFIG_KEY = "laya-decision-config-v1";
+  const questionDefaults = [
+    {id:"department", displayName:"担当部署", enabled:true, type:"choice", instructions:"どの担当へ送るべきか", criteria:{billing:"請求・返金", technical:"障害・技術問題", sales:"料金・契約", other:"その他"}, open:true},
+    {id:"urgency", displayName:"緊急度", enabled:true, type:"score", instructions:"緊急度はどの程度か", criteria:["急がない", "早めの対応", "緊急"]},
+    {id:"churn_risk", displayName:"解約リスク", enabled:true, type:"noul", instructions:"解約・離脱の意向があるか", criteria:{}},
+  ];
+  let restoringQuestions = true;
+  let persistingQuestions = false;
+
+  function copy(value) { return JSON.parse(JSON.stringify(value)); }
+  function savedConfiguration() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CONFIG_KEY));
+      return Array.isArray(saved?.questions) && saved.questions.length ? saved : null;
+    } catch (_) { return null; }
+  }
 
   function parseCriteria(card) {
     try { return JSON.parse(card.querySelector(".criteria").value); }
@@ -133,7 +142,7 @@
   }
   function syncCriteria(card) {
     const type = card.querySelector(".qtype").value;
-    if (type === "noul") { card.querySelector(".criteria").value = "{}"; return; }
+    if (type === "noul") { card.querySelector(".criteria").value = "{}"; persistConfiguration(); return; }
     if (type === "choice") {
       const value = {};
       card.querySelectorAll(".criteria-row").forEach(row => {
@@ -141,10 +150,12 @@
         if (key) value[key] = row.querySelector(".option-description").value.trim();
       });
       card.querySelector(".criteria").value = JSON.stringify(value);
+      persistConfiguration();
       return;
     }
     const value = [...card.querySelectorAll(".option-description")].map(input => input.value.trim()).filter(Boolean);
     card.querySelector(".criteria").value = JSON.stringify(value);
+    persistConfiguration();
   }
   function criterionRow(card, key, description, index) {
     const type = card.querySelector(".qtype").value;
@@ -157,7 +168,7 @@
     }
     const descriptionInput = document.createElement("input"); descriptionInput.className = "option-description"; descriptionInput.value = description; descriptionInput.placeholder = type === "choice" ? "どんな内容か" : "この段階の説明"; descriptionInput.setAttribute("aria-label", "説明");
     const remove = document.createElement("button"); remove.className = "remove-option"; remove.type = "button"; remove.textContent = "×"; remove.setAttribute("aria-label", "この項目を削除");
-    remove.addEventListener("click", () => { row.remove(); syncCriteria(card); renderLevelNumbers(card); });
+    remove.addEventListener("click", () => { row.remove(); syncCriteria(card); renderLevelNumbers(card); persistConfiguration(); });
     row.append(descriptionInput, remove);
     row.querySelectorAll("input").forEach(input => input.addEventListener("input", () => syncCriteria(card)));
     return row;
@@ -188,45 +199,157 @@
     const usable = entries.length ? entries : (type === "choice" ? [["option_1", "選択肢1"], ["option_2", "選択肢2"]] : [["0", "低い"], ["1", "高い"]]);
     usable.forEach(([key, value], index) => editor.append(criterionRow(card, key, String(value), index)));
     const add = document.createElement("button"); add.type = "button"; add.className = "add-option"; add.textContent = type === "choice" ? "＋ 選択肢を追加" : "＋ 段階を追加";
-    add.addEventListener("click", () => { const count = card.querySelectorAll(".criteria-row").length; editor.insertBefore(criterionRow(card, `option_${count + 1}`, "", count), add); syncCriteria(card); });
+    add.addEventListener("click", () => { const count = card.querySelectorAll(".criteria-row").length; editor.insertBefore(criterionRow(card, `option_${count + 1}`, "", count), add); syncCriteria(card); persistConfiguration(); });
     editor.append(add); syncCriteria(card);
   }
-  document.querySelectorAll(".question").forEach(card => {
-    card.querySelector(".qtype").addEventListener("change", () => renderCriteria(card));
-    card.querySelector(".toggle-edit").addEventListener("click", event => {
-      const body = card.querySelector(".question-body"); body.classList.toggle("collapsed");
-      const open = !body.classList.contains("collapsed"); event.currentTarget.textContent = open ? "閉じる" : "編集"; event.currentTarget.setAttribute("aria-expanded", String(open));
+  function cardConfiguration(card) {
+    syncCriteria(card);
+    return {
+      id: card.querySelector(".question-id").value.trim(),
+      displayName: card.querySelector(".display-name").value.trim(),
+      enabled: card.querySelector(".enabled").checked,
+      type: card.querySelector(".qtype").value,
+      instructions: card.querySelector(".instructions").value,
+      criteria: parseCriteria(card),
+      open: !card.querySelector(".question-body").classList.contains("collapsed"),
+    };
+  }
+  function allQuestionCards() { return [...document.querySelectorAll(".question")]; }
+  function updateCardHeading(card) {
+    const id = card.querySelector(".question-id").value.trim() || "ID未設定";
+    const displayName = card.querySelector(".display-name").value.trim() || "名称未設定";
+    card.dataset.question = id;
+    card.querySelector(".question-title").textContent = displayName;
+    card.querySelector(".question-code").textContent = id;
+  }
+  function selectOptions(select, cards, preferred, emptyLabel) {
+    select.replaceChildren();
+    cards.forEach(card => {
+      const option = document.createElement("option");
+      option.value = card.dataset.question;
+      option.textContent = `${card.querySelector(".display-name").value.trim() || "名称未設定"} (${option.value || "ID未設定"})`;
+      select.append(option);
     });
-    card.querySelector(".enabled").addEventListener("change", event => card.classList.toggle("disabled", !event.currentTarget.checked));
+    if (!cards.length) {
+      const option = document.createElement("option"); option.value = ""; option.textContent = emptyLabel; select.append(option);
+    }
+    select.disabled = !cards.length;
+    if ([...select.options].some(option => option.value === preferred)) select.value = preferred;
+  }
+  function refreshQuestionSelectors(primaryPreferred = $("primary-question").value, routePreferred = $("route-question").value) {
+    const enabled = allQuestionCards().filter(card => card.querySelector(".enabled").checked && card.dataset.question);
+    selectOptions($("primary-question"), enabled, primaryPreferred, "有効な項目がありません");
+    const choices = enabled.filter(card => card.querySelector(".qtype").value === "choice");
+    selectOptions($("route-question"), choices, routePreferred, "choice項目がありません");
+  }
+  function persistConfiguration() {
+    if (restoringQuestions || persistingQuestions) return;
+    persistingQuestions = true;
+    try {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify({
+        questions: allQuestionCards().map(cardConfiguration),
+        primaryQuestion: $("primary-question").value,
+        routeQuestion: $("route-question").value,
+      }));
+    } catch (_) { /* 保存できない環境でも画面操作は継続する */ }
+    finally { persistingQuestions = false; }
+  }
+  function createQuestionCard(saved) {
+    const card = document.createElement("article");
+    card.className = `question${saved.enabled === false ? " disabled" : ""}`;
+    card.innerHTML = `
+      <div class="question-head">
+        <label class="switch"><input class="enabled" type="checkbox"><span><b class="question-title"></b><small class="question-code"></small></span></label>
+        <button class="toggle-edit" type="button">編集</button>
+      </div>
+      <div class="question-body collapsed">
+        <div class="question-names">
+          <label class="mini-field"><span>表示名</span><input class="display-name" placeholder="例: 担当部署"></label>
+          <label class="mini-field"><span>質問ID</span><input class="question-id" placeholder="例: department" autocapitalize="none"></label>
+        </div>
+        <label class="mini-field"><span>判定方法</span><select class="qtype"><option value="choice">選択肢から選ぶ</option><option value="score">段階で評価する</option><option value="noul">0〜1で判定する</option></select></label>
+        <label class="mini-field"><span>Layaへの質問</span><input class="instructions" placeholder="何を判定するか"></label>
+        <textarea class="criteria hidden"></textarea>
+        <div class="criteria-editor"></div>
+        <button class="delete-question" type="button">この判定項目を削除</button>
+      </div>`;
+    card.querySelector(".enabled").checked = saved.enabled !== false;
+    card.querySelector(".display-name").value = saved.displayName || saved.id || "判定項目";
+    card.querySelector(".question-id").value = saved.id || "";
+    card.querySelector(".qtype").value = ["choice", "score", "noul"].includes(saved.type) ? saved.type : "choice";
+    card.querySelector(".instructions").value = saved.instructions || "";
+    card.querySelector(".criteria").value = JSON.stringify(saved.criteria ?? {});
+    const body = card.querySelector(".question-body");
+    const toggle = card.querySelector(".toggle-edit");
+    if (saved.open) body.classList.remove("collapsed");
+    toggle.textContent = saved.open ? "閉じる" : "編集";
+    toggle.setAttribute("aria-expanded", String(Boolean(saved.open)));
+    updateCardHeading(card);
+
+    card.querySelector(".qtype").addEventListener("change", () => { renderCriteria(card); refreshQuestionSelectors(); persistConfiguration(); });
+    toggle.addEventListener("click", event => {
+      body.classList.toggle("collapsed");
+      const open = !body.classList.contains("collapsed"); event.currentTarget.textContent = open ? "閉じる" : "編集"; event.currentTarget.setAttribute("aria-expanded", String(open));
+      persistConfiguration();
+    });
+    card.querySelector(".enabled").addEventListener("change", event => { card.classList.toggle("disabled", !event.currentTarget.checked); refreshQuestionSelectors(); persistConfiguration(); });
+    card.querySelectorAll(".display-name,.question-id").forEach(input => input.addEventListener("input", () => { updateCardHeading(card); refreshQuestionSelectors(); persistConfiguration(); }));
+    card.querySelector(".instructions").addEventListener("input", persistConfiguration);
+    card.querySelector(".delete-question").addEventListener("click", () => { card.remove(); refreshQuestionSelectors(); persistConfiguration(); });
     renderCriteria(card);
+    return card;
+  }
+  function renderQuestions(configuration) {
+    const container = $("questions"); container.replaceChildren();
+    configuration.questions.forEach(question => container.append(createQuestionCard(question)));
+    refreshQuestionSelectors(configuration.primaryQuestion || "department", configuration.routeQuestion || "department");
+  }
+  function nextQuestionId() {
+    const used = new Set(allQuestionCards().map(card => card.dataset.question));
+    let index = 1;
+    while (used.has(`question_${index}`)) index += 1;
+    return `question_${index}`;
+  }
+  $("add-question").addEventListener("click", () => {
+    const id = nextQuestionId();
+    const card = createQuestionCard({id, displayName:"新しい判定", enabled:true, type:"choice", instructions:"何を判定しますか", criteria:{option_1:"選択肢1", option_2:"選択肢2"}, open:true});
+    $("questions").append(card); refreshQuestionSelectors(); persistConfiguration();
+    card.scrollIntoView({behavior:"smooth", block:"center"});
   });
   $("reset-questions").addEventListener("click", () => {
-    questionDefaults.forEach(saved => {
-      const card = document.querySelector(`[data-question="${saved.id}"]`);
-      card.querySelector(".enabled").checked = saved.enabled; card.classList.remove("disabled");
-      card.querySelector(".qtype").value = saved.type;
-      card.querySelector(".instructions").value = saved.instructions;
-      card.querySelector(".criteria").value = saved.criteria;
-      card.classList.remove("show-advanced");
-      renderCriteria(card);
-    });
+    restoringQuestions = true;
+    renderQuestions({questions:copy(questionDefaults), primaryQuestion:"department", routeQuestion:"department"});
+    restoringQuestions = false;
+    persistConfiguration();
   });
+  $("primary-question").addEventListener("change", persistConfiguration);
+  $("route-question").addEventListener("change", persistConfiguration);
+
+  const initialConfiguration = savedConfiguration() || {questions:copy(questionDefaults), primaryQuestion:"department", routeQuestion:"department"};
+  renderQuestions(initialConfiguration);
+  restoringQuestions = false;
+  persistConfiguration();
 
   function requestBody() {
     const questions = {};
-    document.querySelectorAll(".question").forEach(card => {
+    const ids = new Set();
+    allQuestionCards().forEach(card => {
       if (!card.querySelector(".enabled").checked) return;
+      const id = card.querySelector(".question-id").value.trim();
+      if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(id)) throw new Error("質問IDは英字から始まる64文字以内の英数字・_・-で入力してください");
+      if (ids.has(id)) throw new Error(`質問ID「${id}」が重複しています`);
+      ids.add(id);
       const type = card.querySelector(".qtype").value;
       const instructions = card.querySelector(".instructions").value.trim();
-      if (!instructions) throw new Error(`${card.dataset.question}: 質問を入力してください`);
+      if (!instructions) throw new Error(`${id}: 質問を入力してください`);
       syncCriteria(card);
       const question = {type, instructions};
       if (type !== "noul") {
         question.criteria = JSON.parse(card.querySelector(".criteria").value);
         const count = Array.isArray(question.criteria) ? question.criteria.length : Object.keys(question.criteria).length;
-        if (count < 2) throw new Error(`${card.dataset.question}: 項目を2つ以上設定してください`);
+        if (count < 2) throw new Error(`${id}: 項目を2つ以上設定してください`);
       }
-      questions[card.dataset.question] = question;
+      questions[id] = question;
     });
     if (!$("state").value.trim()) throw new Error("判定する文章を入力してください");
     if (!Object.keys(questions).length) throw new Error("判定項目を1つ以上ONにしてください");
@@ -244,12 +367,16 @@
     });
     return wrap;
   }
+  function displayNameFor(name) {
+    const card = allQuestionCards().find(item => item.dataset.question === name);
+    return card?.querySelector(".display-name").value.trim() || name;
+  }
   function visualAnswer(name, answer, question) {
     const card = document.createElement("article"); card.className = `answer-card answer-${answer.type || "unknown"}`;
     const head = document.createElement("div"); head.className = "answer-head";
     const heading = document.createElement("div");
-    const title = document.createElement("b"); title.textContent = question?.instructions || name;
-    const type = document.createElement("small"); type.textContent = `${name} · ${answer.type || "answer"}`;
+    const title = document.createElement("b"); title.textContent = displayNameFor(name);
+    const type = document.createElement("small"); type.textContent = `${name} · ${answer.type || "answer"} · ${question?.instructions || ""}`;
     heading.append(title, type); head.append(heading); card.append(head);
 
     if (answer.type === "choice") {
@@ -275,12 +402,21 @@
     }
     return card;
   }
+  function primaryAnswerText(answer, question) {
+    if (!answer) return "判定なし";
+    if (answer.type === "choice") return question?.criteria?.[answer.choice] || answer.choice || "判定なし";
+    if (answer.type === "score") return Number.isFinite(Number(answer.score)) ? Number(answer.score).toFixed(2) : "判定なし";
+    const value = Number(answer.noul ?? answer.probability);
+    return Number.isFinite(value) ? percent(value) : "判定なし";
+  }
   function showDecision(data, questions) {
-    const department = data.answers?.department || {};
-    const departmentLabels = questions?.department?.criteria || {};
-    $("primary-result").textContent = departmentLabels[department.choice] || department.choice || "判定なし";
-    $("primary-id").textContent = department.choice || "—";
-    $("confidence").textContent = percent(data.confidence);
+    const entries = Object.entries(data.answers || {});
+    const preferred = $("primary-question").value;
+    const primaryEntry = entries.find(([name]) => name === preferred) || entries[0] || ["", null];
+    const [primaryName, primaryAnswer] = primaryEntry;
+    $("primary-result").textContent = primaryAnswerText(primaryAnswer, questions?.[primaryName]);
+    $("primary-id").textContent = primaryName ? `${displayNameFor(primaryName)} · ${primaryName}` : "—";
+    $("confidence").textContent = percent(primaryAnswer?.answer_confidence ?? primaryAnswer?.confidence ?? data.confidence);
     $("inference").textContent = ms(data.inference_ms);
     const answerList = $("answers"); answerList.replaceChildren();
     Object.entries(data.answers || {}).forEach(([name, answer]) => answerList.append(visualAnswer(name, answer, questions?.[name])));
@@ -306,7 +442,10 @@
   $("trace-run").addEventListener("click", async () => {
     clearError($("trace-error")); busy($("trace-run"), true);
     try {
-      const data = await api("/api/adk/run", {state:$("state").value, questions:requestBody().questions});
+      const request = requestBody();
+      const routeQuestion = $("route-question").value;
+      if (!routeQuestion || request.questions[routeQuestion]?.type !== "choice") throw new Error("ADK routeに使うchoice項目を選んでください");
+      const data = await api("/api/adk/run", {state:request.state, questions:request.questions, route_question:routeQuestion});
       const trace = $("trace"); trace.replaceChildren();
       data.trace.forEach(item => { const li=document.createElement("li"), title=document.createElement("b"), value=document.createElement("code"); title.textContent=item.stage; value.textContent=typeof item.value === "string" ? item.value : JSON.stringify(item.value,null,2); li.append(title,value); trace.append(li); });
       $("adk-runtime").classList.toggle("hidden", data.runtime !== "google-adk-2");

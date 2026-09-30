@@ -160,6 +160,7 @@ FastAPIは `127.0.0.1:8000` のみにbindし、Tailscale Serveがtailnet内向�
 3. Ubuntu側の `tailscale serve status` に表示されたHTTPS URLをSafariで開きます。
 4. `ONLINE / CPU / multilingual / READY` を確認します。
 5. `LAYA_API_KEY` を設定した場合は、画面のBearer Token欄へ入力します。値はSafariのsessionStorageだけに保存されます。
+6. Decision Labでは判定項目を追加・削除でき、表示名、質問ID、choice / score / noul、主結果、ADK route対象を編集できます。判定設定はSafariのlocalStorageへ自動保存されます。
 
 モデルデータはUbuntu PC上だけにあり、iPhoneへダウンロードされません。
 
@@ -200,6 +201,8 @@ Laya choice + confidence
 ```
 
 Web UIのADK 2 Traceと `POST /api/adk/run` は、Google ADK 2の `InMemoryRunner` で実Workflowを実行し、`Input → Laya → Event(route) → selected Skill → result` をJSONで返します。FastAPIとWorkflowは同じ常駐Laya Routerを共有するため、モデルを二重ロードしません。レスポンスの `adk_events` では実際に実行されたnode pathとrouteも確認できます。
+
+`/api/adk/run` の任意の `route_question` で、routingに使うchoice質問を指定できます。省略時は後方互換のため `department` を使用します。
 
 ADK developer CLIを単独で試す場合:
 
