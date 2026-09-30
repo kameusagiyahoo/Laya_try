@@ -9,25 +9,101 @@
     if (token.value) value.Authorization = `Bearer ${token.value}`;
     return value;
   };
-  async function api(path, body) {
-    const response = await fetch(path, {method: body ? "POST" : "GET", headers: headers(), body: body ? JSON.stringify(body) : undefined});
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
-    return data;
+  class ApiError extends Error {
+    constructor(message, options = {}) {
+      super(message);
+      this.name = "ApiError";
+      Object.assign(this, options);
+    }
+  }
+  async function api(path, body, timeoutMs = 120000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(path, {
+        method: body ? "POST" : "GET",
+        headers: headers(),
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = Array.isArray(data.detail)
+          ? data.detail.map(item => item?.msg).filter(Boolean).join(" / ")
+          : data.detail;
+        throw new ApiError(detail || `HTTP ${response.status}`, {
+          status: response.status,
+          retryAfter: Number(response.headers.get("Retry-After")) || 0,
+        });
+      }
+      return data;
+    } catch (error) {
+      if (error.name === "AbortError") throw new ApiError("timeout", {kind: "timeout"});
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(error.message, {kind: navigator.onLine ? "network" : "offline"});
+    } finally {
+      clearTimeout(timer);
+    }
   }
   function busy(button, yes) { button.disabled = yes; button.dataset.label ||= button.textContent; button.textContent = yes ? "Running…" : button.dataset.label; }
   function ms(value) { return `${Number(value).toFixed(1)} ms`; }
 
+  function friendlyError(error) {
+    if (error.status === 503) return `サーバーが混雑しています。${Math.max(1, error.retryAfter)}秒後にもう一度お試しください。`;
+    if (error.status === 401) return "Bearer Tokenが正しくありません。Server StatusのToken欄を確認してください。";
+    if (error.status === 422) return `入力内容を確認してください。${typeof error.message === "string" ? `（${error.message}）` : ""}`;
+    if (error.kind === "timeout") return "応答に時間がかかっています。PCの状態を確認してからもう一度お試しください。";
+    if (error.kind === "offline") return "iPhoneがオフラインです。Tailscale VPNと通信状態を確認してください。";
+    if (error.kind === "network") return "サーバーへ接続できません。Ubuntu PCとTailscaleの状態を確認してください。";
+    return error.message || "処理に失敗しました。";
+  }
+  function clearError(element) { element.replaceChildren(); }
+  function showError(element, error, retryButton) {
+    clearError(element);
+    const message = document.createElement("span");
+    message.textContent = friendlyError(error);
+    element.append(message);
+    if (!retryButton || error.status === 401 || error.status === 422) return;
+
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "retry-button";
+    retry.addEventListener("click", () => retryButton.click());
+    element.append(retry);
+
+    let remaining = error.status === 503 ? Math.max(1, error.retryAfter) : 0;
+    const update = () => {
+      retry.disabled = remaining > 0;
+      retry.textContent = remaining > 0 ? `${remaining}秒後に再試行できます` : "もう一度試す";
+    };
+    update();
+    if (remaining > 0) {
+      const countdown = setInterval(() => {
+        remaining -= 1;
+        update();
+        if (remaining <= 0 || !retry.isConnected) clearInterval(countdown);
+      }, 1000);
+    }
+  }
+
   async function health() {
     try {
-      const data = await api("/health");
+      const data = await api("/health", undefined, 6000);
       $("online").textContent = data.status === "ready" ? "ONLINE" : "STARTING";
       $("online").className = `pill ${data.status === "ready" ? "good" : "pending"}`;
       $("device").textContent = String(data.device).toUpperCase();
       $("model").textContent = data.model;
       $("preload").textContent = data.preloaded ? "READY" : "NO";
       $("threads").textContent = data.threads;
-    } catch (_) { $("online").textContent = "OFFLINE"; $("online").className = "pill bad"; }
+      $("capacity").textContent = data.max_concurrent ?? "—";
+      $("status-message").textContent = data.status === "ready" ? "PCの推論サーバーへ接続済みです。" : "モデルを準備しています。しばらくお待ちください。";
+      $("status-message").className = `status-message ${data.status === "ready" ? "connected" : ""}`;
+    } catch (error) {
+      $("online").textContent = "OFFLINE";
+      $("online").className = "pill bad";
+      $("status-message").textContent = friendlyError(error);
+      $("status-message").className = "status-message disconnected";
+    }
   }
 
   const statePresets = {
@@ -213,22 +289,22 @@
     $("decision-results").scrollIntoView({behavior:"smooth", block:"start"});
   }
   $("run").addEventListener("click", async () => {
-    $("decision-error").textContent = ""; busy($("run"), true);
+    clearError($("decision-error")); busy($("run"), true);
     try { const request = requestBody(); showDecision(await api("/api/predict", request), request.questions); }
-    catch (error) { $("decision-error").textContent = error.message; }
+    catch (error) { showError($("decision-error"), error, $("run")); }
     finally { busy($("run"), false); }
   });
   $("benchmark").addEventListener("click", async () => {
-    $("benchmark-error").textContent = ""; busy($("benchmark"), true);
+    clearError($("benchmark-error")); busy($("benchmark"), true);
     try {
-      const data = await api("/api/benchmark", {iterations:Number($("iterations").value)});
+      const data = await api("/api/benchmark", {iterations:Number($("iterations").value)}, 900000);
       [["mean","mean_ms"],["p50","p50_ms"],["p95","p95_ms"],["min","min_ms"],["max","max_ms"]].forEach(([id,key]) => $(id).textContent = ms(data[key]));
       $("failures").textContent = data.failures; $("benchmark-results").classList.remove("hidden");
-    } catch (error) { $("benchmark-error").textContent = error.message; }
+    } catch (error) { showError($("benchmark-error"), error, $("benchmark")); }
     finally { busy($("benchmark"), false); }
   });
   $("trace-run").addEventListener("click", async () => {
-    $("trace-error").textContent = ""; busy($("trace-run"), true);
+    clearError($("trace-error")); busy($("trace-run"), true);
     try {
       const data = await api("/api/adk/run", {state:$("state").value, questions:requestBody().questions});
       const trace = $("trace"); trace.replaceChildren();
@@ -244,8 +320,10 @@
         });
         events.classList.remove("hidden");
       } else events.classList.add("hidden");
-    } catch (error) { $("trace-error").textContent = error.message; }
+    } catch (error) { showError($("trace-error"), error, $("trace-run")); }
     finally { busy($("trace-run"), false); }
   });
+  window.addEventListener("online", health);
+  window.addEventListener("offline", health);
   health(); setInterval(health, 15000);
 })();

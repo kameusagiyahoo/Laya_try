@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#08111d">
   <title>Laya Try — Server Mode</title>
-  <link rel="stylesheet" href="/static/server.css?v=6">
+  <link rel="stylesheet" href="/static/server.css?v=7">
 </head>
 <body>
   <main class="shell">
@@ -20,12 +20,14 @@
         <div><span class="step">01</span><h2>Server Status</h2></div>
         <b id="online" class="pill pending">CHECKING</b>
       </div>
-      <div class="metrics four">
+      <div class="metrics status-metrics">
         <div><small>DEVICE</small><strong id="device">—</strong></div>
         <div><small>MODEL</small><strong id="model">—</strong></div>
         <div><small>PRELOAD</small><strong id="preload">—</strong></div>
         <div><small>THREADS</small><strong id="threads">—</strong></div>
+        <div><small>受付上限</small><strong id="capacity">—</strong></div>
       </div>
+      <p id="status-message" class="status-message" role="status" aria-live="polite">サーバーを確認しています…</p>
       <label class="field compact"><span>Bearer Token（設定時のみ）</span><input id="token" type="password" autocomplete="off" placeholder="LAYA_API_KEY"></label>
     </section>
 
@@ -73,7 +75,7 @@
         </article>
       </div>
       <button id="run" class="button primary">この文章を判定する</button>
-      <p id="decision-error" class="error"></p>
+      <p id="decision-error" class="error" role="alert"></p>
       <div id="decision-results" class="results hidden">
         <section class="result-hero">
           <p class="result-label">判定結果</p>
@@ -97,7 +99,7 @@
       <div class="section-head"><div><span class="step">03</span><h2>Benchmark</h2></div></div>
       <div class="inline"><select id="iterations"><option>10</option><option>50</option><option selected>100</option></select><button id="benchmark" class="button">Run benchmark</button></div>
       <p class="hint">warmupは統計から除外されます。</p>
-      <p id="benchmark-error" class="error"></p>
+      <p id="benchmark-error" class="error" role="alert"></p>
       <div id="benchmark-results" class="metrics three hidden">
         <div><small>MEAN</small><strong id="mean">—</strong></div>
         <div><small>P50</small><strong id="p50">—</strong></div>
@@ -111,13 +113,13 @@
     <section class="card">
       <div class="section-head"><div><span class="step">04</span><h2>ADK 2 Trace</h2></div><span id="adk-runtime" class="runtime-badge hidden">GOOGLE ADK 2</span></div>
       <button id="trace-run" class="button">Run workflow</button>
-      <p id="trace-error" class="error"></p>
+      <p id="trace-error" class="error" role="alert"></p>
       <ol id="trace" class="trace"></ol>
       <div id="adk-events" class="adk-events hidden"></div>
     </section>
 
     <footer>Server Mode · CPU-only · Tailscale private access</footer>
   </main>
-  <script src="/static/server.js?v=6"></script>
+  <script src="/static/server.js?v=7"></script>
 </body>
 </html>
