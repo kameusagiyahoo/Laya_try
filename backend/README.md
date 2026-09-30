@@ -1,4 +1,34 @@
-# ADK 2 + Laya backend
+# Backend — Server Mode
+
+主経路は `server/` のCPU-only FastAPI Server Modeです。全体セットアップ、Tailscale、API、benchmark、キャッシュについては[ルートREADME](../README.md)を参照してください。
+
+## FastAPI
+
+リポジトリルートから:
+
+```bash
+./scripts/start.sh
+```
+
+## Google ADK 2 workflow
+
+`adk_laya/agent.py` はLaya choiceを `Event(route=...)` へ変換する実ADK 2 workflowです。routeは `billing / technical / sales / other / human`。`LAYA_CONFIDENCE_THRESHOLD` 未満は `human` へfallbackします。
+
+```bash
+cd backend
+../.venv/bin/adk run adk_laya
+```
+
+ADK CLIはFastAPIとは別プロセスでモデルをロードします。通常利用はFastAPIの `/api/adk/run` とWeb UIを使用してください。
+
+## Tests (no model download)
+
+```bash
+.venv/bin/pip install -r backend/requirements-dev.txt
+.venv/bin/python -m pytest backend/tests -q
+```
+
+## Legacy ADK sample notes
 
 This directory contains the runnable local counterpart of the static ADK 2 Lab shown on GitHub Pages.
 
