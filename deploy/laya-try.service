@@ -1,0 +1,16 @@
+[Unit]
+Description=Laya Try CPU inference server
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/nakamura-pc/projects/Laya_test
+ExecStart=/home/nakamura-pc/projects/Laya_test/scripts/start.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=15min
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

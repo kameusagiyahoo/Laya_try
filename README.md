@@ -106,6 +106,26 @@ curl http://127.0.0.1:8000/health
 {"status":"ready","model":"multilingual","device":"cpu","preloaded":true,"threads":4}
 ```
 
+### PC起動時に自動起動する
+
+このリポジトリの配置先が `/home/nakamura-pc/projects/Laya_test` の場合:
+
+```bash
+systemctl --user link "$PWD/deploy/laya-try.service"
+systemctl --user daemon-reload
+systemctl --user enable --now laya-try.service
+loginctl enable-linger "$USER"
+```
+
+状態とログの確認:
+
+```bash
+systemctl --user status laya-try.service
+journalctl --user -u laya-try.service -f
+```
+
+`linger` を有効にすると、ログアウト後や再起動後もユーザーサービスを起動できます。別の配置先で使う場合は、serviceファイルの `WorkingDirectory` と `ExecStart` を実際の絶対パスへ変更してください。
+
 Bearer Tokenを有効にする場合は `.env` へ追加します。
 
 ```dotenv
