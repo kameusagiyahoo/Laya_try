@@ -28,6 +28,7 @@ from laya import Router
 import torch
 
 from server.config import Settings
+from server.routing import select_route
 
 
 SETTINGS = Settings.from_env()
@@ -67,25 +68,12 @@ QUESTIONS: dict[str, dict[str, Any]] = {
 }
 
 
-def _confidence(answer: dict[str, Any]) -> float:
-    """Read confidence across current Laya result field names."""
-    for key in ("answer_confidence", "confidence"):
-        value = answer.get(key)
-        if value is not None:
-            return float(value)
-    return 0.0
-
-
 def laya_route(node_input: str):
     """Use local Laya as the System-1 routing node."""
     state = {"ticket": node_input}
     result = laya_router.predict(state, QUESTIONS, model=SETTINGS.model)
 
-    department = result["answers"]["department"]
-    choice = str(department["choice"])
-    confidence = _confidence(department)
-
-    route = choice if confidence >= CONFIDENCE_THRESHOLD else "human"
+    route, choice, confidence = select_route(result, CONFIDENCE_THRESHOLD)
 
     # ADK 2 graph routing is driven by Event(route=...).
     # Keep the full Laya result in workflow state for observability/debugging.

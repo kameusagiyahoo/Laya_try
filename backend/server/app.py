@@ -45,8 +45,9 @@ def create_app(
     async def authorize(authorization: str | None = Header(default=None)) -> None:
         if settings.api_key is None:
             return
-        expected = f"Bearer {settings.api_key}"
-        if not hmac.compare_digest(authorization or "", expected):
+        expected = f"Bearer {settings.api_key}".encode("utf-8", "surrogateescape")
+        supplied = (authorization or "").encode("utf-8", "surrogateescape")
+        if not hmac.compare_digest(supplied, expected):
             raise HTTPException(status_code=401, detail="invalid or missing bearer token")
 
     async def infer(state: Any, questions: dict[str, Any]) -> dict[str, Any]:

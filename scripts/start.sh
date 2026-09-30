@@ -21,7 +21,7 @@ if [[ ! -d .venv ]]; then
 fi
 
 venv_python="$repo_dir/.venv/bin/python"
-if ! "$venv_python" -c 'import fastapi, laya, uvicorn' >/dev/null 2>&1; then
+if ! "$venv_python" -c 'import fastapi, google.adk, laya, uvicorn' >/dev/null 2>&1; then
   echo "Installing server dependencies ..."
   "$venv_python" -m pip install --upgrade pip
   "$venv_python" -m pip install -r backend/requirements.txt

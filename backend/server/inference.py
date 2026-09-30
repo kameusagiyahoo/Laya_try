@@ -66,11 +66,13 @@ def enrich_result(raw: dict[str, Any], settings: Settings, inference_ms: float) 
         if isinstance(answer, dict):
             probabilities[name] = answer.get("probabilities", {})
             confidences.append(_answer_confidence(answer))
+    primary_confidence = _answer_confidence(answers.get("department"))
+    overall_confidence = primary_confidence if "department" in answers else (min(confidences) if confidences else 0.0)
     result = dict(raw)
     result.update(
         answers=answers,
         probabilities=probabilities,
-        confidence=min(confidences) if confidences else 0.0,
+        confidence=overall_confidence,
         model=str(raw.get("model") or settings.model),
         device=settings.device,
         inference_ms=round(inference_ms, 3),
