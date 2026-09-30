@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#08111d">
+  <title>Laya Try — Server Mode</title>
+  <link rel="stylesheet" href="/static/server.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">LAYA TRY / SERVER MODE</p>
+      <h1>CPU Decision Server</h1>
+      <p>モデルはUbuntu PCに常駐。iPhoneはTailscale経由で結果だけを受け取ります。</p>
+    </header>
+
+    <section class="card status-card">
+      <div class="section-head">
+        <div><span class="step">01</span><h2>Server Status</h2></div>
+        <b id="online" class="pill pending">CHECKING</b>
+      </div>
+      <div class="metrics four">
+        <div><small>DEVICE</small><strong id="device">—</strong></div>
+        <div><small>MODEL</small><strong id="model">—</strong></div>
+        <div><small>PRELOAD</small><strong id="preload">—</strong></div>
+        <div><small>THREADS</small><strong id="threads">—</strong></div>
+      </div>
+      <label class="field compact"><span>Bearer Token（設定時のみ）</span><input id="token" type="password" autocomplete="off" placeholder="LAYA_API_KEY"></label>
+    </section>
+
+    <section class="card">
+      <div class="section-head"><div><span class="step">02</span><h2>Decision Lab</h2></div></div>
+      <label class="field"><span>State</span><textarea id="state" rows="5">二重請求されています。返金してください。</textarea></label>
+      <div class="questions">
+        <article class="question" data-question="department">
+          <label class="switch"><input class="enabled" type="checkbox" checked><span>department</span></label>
+          <select class="qtype"><option>choice</option><option>score</option><option>noul</option></select>
+          <input class="instructions" value="どの担当へ送るべきか" aria-label="instructions">
+          <textarea class="criteria" rows="4" aria-label="criteria">{"billing":"請求・返金","technical":"障害・技術問題","sales":"料金・契約","other":"その他"}</textarea>
+        </article>
+        <article class="question" data-question="urgency">
+          <label class="switch"><input class="enabled" type="checkbox" checked><span>urgency</span></label>
+          <select class="qtype"><option>score</option><option>choice</option><option>noul</option></select>
+          <input class="instructions" value="緊急度はどの程度か" aria-label="instructions">
+          <textarea class="criteria" rows="3" aria-label="criteria">["急がない","早めの対応","緊急"]</textarea>
+        </article>
+        <article class="question" data-question="churn_risk">
+          <label class="switch"><input class="enabled" type="checkbox" checked><span>churn_risk</span></label>
+          <select class="qtype"><option>noul</option><option>choice</option><option>score</option></select>
+          <input class="instructions" value="解約・離脱の意向があるか" aria-label="instructions">
+          <textarea class="criteria hidden" rows="3" aria-label="criteria">{}</textarea>
+        </article>
+      </div>
+      <button id="run" class="button primary">Run inference</button>
+      <p id="decision-error" class="error"></p>
+      <div id="decision-results" class="results hidden">
+        <div class="metrics three">
+          <div><small>CHOICE</small><strong id="choice">—</strong></div>
+          <div><small>CONFIDENCE</small><strong id="confidence">—</strong></div>
+          <div><small>INFERENCE</small><strong id="inference">—</strong></div>
+        </div>
+        <div id="probabilities" class="probabilities"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head"><div><span class="step">03</span><h2>Benchmark</h2></div></div>
+      <div class="inline"><select id="iterations"><option>10</option><option>50</option><option selected>100</option></select><button id="benchmark" class="button">Run benchmark</button></div>
+      <p class="hint">warmupは統計から除外されます。</p>
+      <p id="benchmark-error" class="error"></p>
+      <div id="benchmark-results" class="metrics three hidden">
+        <div><small>MEAN</small><strong id="mean">—</strong></div>
+        <div><small>P50</small><strong id="p50">—</strong></div>
+        <div><small>P95</small><strong id="p95">—</strong></div>
+        <div><small>MIN</small><strong id="min">—</strong></div>
+        <div><small>MAX</small><strong id="max">—</strong></div>
+        <div><small>FAILURES</small><strong id="failures">—</strong></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head"><div><span class="step">04</span><h2>ADK 2 Trace</h2></div></div>
+      <button id="trace-run" class="button">Run workflow</button>
+      <p id="trace-error" class="error"></p>
+      <ol id="trace" class="trace"></ol>
+    </section>
+
+    <footer>Server Mode · CPU-only · Tailscale private access</footer>
+  </main>
+  <script src="/static/server.js"></script>
+</body>
+</html>

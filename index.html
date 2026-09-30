@@ -4,26 +4,59 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1020" />
-  <title>Laya Try — iPhone Browser Lab</title>
+  <title>Laya Try — Server Mode</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <main class="shell">
     <header class="hero">
       <p class="eyebrow">LAYA TRY / LOCAL DECISION MODEL</p>
-      <h1>iPhoneでLayaを試す</h1>
-      <p class="lead">ブラウザの対応状況を確認し、実際のLaya ONNX / WebGPUデモを起動するための実験ページです。</p>
+      <h1>Laya Server Mode</h1>
+      <p class="lead">Ubuntu PC上のCPUでLayaを常駐実行し、iPhone SafariからTailscale HTTPS経由で利用する構成が主経路です。</p>
       <div class="badges">
-        <span class="badge">322M params</span>
-        <span class="badge">FP16 ≈ 647 MB</span>
-        <span class="badge">Local inference</span>
+        <span class="badge">CPU inference</span>
+        <span class="badge">FastAPI</span>
+        <span class="badge">Tailscale private HTTPS</span>
       </div>
     </header>
 
     <section class="card">
       <div class="section-head">
         <div>
-          <p class="kicker">01 / DEVICE CHECK</p>
+          <p class="kicker">PRIMARY / SERVER MODE</p>
+          <h2>Ubuntu PCで推論する</h2>
+        </div>
+        <span class="status good">RECOMMENDED</span>
+      </div>
+      <p class="body-copy">モデルはPCへダウンロードして常駐させます。iPhoneへモデルを配信しないため、Safariのメモリ制限を受けません。</p>
+      <div class="demo-grid">
+        <article class="demo">
+          <div class="demo-top">
+            <span class="demo-icon">S</span>
+            <div>
+              <h3>Server UI</h3>
+              <p><code>./scripts/start.sh</code> で起動後、Tailscale ServeのHTTPS URLをSafariで開きます。</p>
+            </div>
+          </div>
+          <a class="button primary" href="https://github.com/kameusagiyahoo/Laya_try#5-start-server" target="_blank" rel="noopener">セットアップ手順</a>
+        </article>
+        <article class="demo">
+          <div class="demo-top">
+            <span class="demo-icon">API</span>
+            <div>
+              <h3>FastAPI</h3>
+              <p><code>/health</code>、推論、benchmark、ADK 2 traceをPC側から提供します。</p>
+            </div>
+          </div>
+          <a class="button" href="https://github.com/kameusagiyahoo/Laya_try/tree/main/backend/server" target="_blank" rel="noopener">Server実装を見る</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="kicker">LEGACY / DEVICE CHECK</p>
           <h2>このブラウザで試せるか</h2>
         </div>
         <span id="overall" class="status pending">CHECKING</span>
