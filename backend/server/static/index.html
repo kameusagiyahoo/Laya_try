@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#08111d">
   <title>Laya Try — Server Mode</title>
-  <link rel="stylesheet" href="/static/server.css">
+  <link rel="stylesheet" href="/static/server.css?v=3">
 </head>
 <body>
   <main class="shell">
@@ -31,28 +31,48 @@
 
     <section class="card">
       <div class="section-head"><div><span class="step">02</span><h2>Decision Lab</h2></div></div>
-      <label class="field"><span>State</span><textarea id="state" rows="5">二重請求されています。返金してください。</textarea></label>
+      <p class="hint">文章を入力し、知りたい判定を下のカードで選びます。</p>
+      <div class="preset-row" aria-label="入力例">
+        <button class="chip active" type="button" data-state-preset="billing">二重請求</button>
+        <button class="chip" type="button" data-state-preset="technical">システム障害</button>
+        <button class="chip" type="button" data-state-preset="sales">料金相談</button>
+        <button class="chip" type="button" data-state-preset="ambiguous">曖昧な相談</button>
+      </div>
+      <label class="field"><span>判定する文章</span><textarea id="state" rows="5" placeholder="ここに自由な文章を入力してください">二重請求されています。返金してください。</textarea></label>
+      <div class="question-toolbar">
+        <div><strong>判定項目</strong><small>使う項目だけONにします</small></div>
+        <button id="reset-questions" class="text-button" type="button">初期設定に戻す</button>
+      </div>
       <div class="questions">
         <article class="question" data-question="department">
-          <label class="switch"><input class="enabled" type="checkbox" checked><span>department</span></label>
-          <select class="qtype"><option>choice</option><option>score</option><option>noul</option></select>
-          <input class="instructions" value="どの担当へ送るべきか" aria-label="instructions">
-          <textarea class="criteria" rows="4" aria-label="criteria">{"billing":"請求・返金","technical":"障害・技術問題","sales":"料金・契約","other":"その他"}</textarea>
+          <div class="question-head"><label class="switch"><input class="enabled" type="checkbox" checked><span><b>担当部署</b><small>department</small></span></label><button class="toggle-edit" type="button" aria-expanded="true">閉じる</button></div>
+          <div class="question-body">
+            <label class="mini-field"><span>判定方法</span><select class="qtype"><option value="choice">選択肢から選ぶ</option><option value="score">段階で評価する</option><option value="noul">0〜1で判定する</option></select></label>
+            <label class="mini-field"><span>Layaへの質問</span><input class="instructions" value="どの担当へ送るべきか"></label>
+            <textarea class="criteria hidden">{"billing":"請求・返金","technical":"障害・技術問題","sales":"料金・契約","other":"その他"}</textarea>
+            <div class="criteria-editor"></div>
+          </div>
         </article>
         <article class="question" data-question="urgency">
-          <label class="switch"><input class="enabled" type="checkbox" checked><span>urgency</span></label>
-          <select class="qtype"><option>score</option><option>choice</option><option>noul</option></select>
-          <input class="instructions" value="緊急度はどの程度か" aria-label="instructions">
-          <textarea class="criteria" rows="3" aria-label="criteria">["急がない","早めの対応","緊急"]</textarea>
+          <div class="question-head"><label class="switch"><input class="enabled" type="checkbox" checked><span><b>緊急度</b><small>urgency</small></span></label><button class="toggle-edit" type="button" aria-expanded="false">編集</button></div>
+          <div class="question-body collapsed">
+            <label class="mini-field"><span>判定方法</span><select class="qtype"><option value="score">段階で評価する</option><option value="choice">選択肢から選ぶ</option><option value="noul">0〜1で判定する</option></select></label>
+            <label class="mini-field"><span>Layaへの質問</span><input class="instructions" value="緊急度はどの程度か"></label>
+            <textarea class="criteria hidden">["急がない","早めの対応","緊急"]</textarea>
+            <div class="criteria-editor"></div>
+          </div>
         </article>
         <article class="question" data-question="churn_risk">
-          <label class="switch"><input class="enabled" type="checkbox" checked><span>churn_risk</span></label>
-          <select class="qtype"><option>noul</option><option>choice</option><option>score</option></select>
-          <input class="instructions" value="解約・離脱の意向があるか" aria-label="instructions">
-          <textarea class="criteria hidden" rows="3" aria-label="criteria">{}</textarea>
+          <div class="question-head"><label class="switch"><input class="enabled" type="checkbox" checked><span><b>解約リスク</b><small>churn_risk</small></span></label><button class="toggle-edit" type="button" aria-expanded="false">編集</button></div>
+          <div class="question-body collapsed">
+            <label class="mini-field"><span>判定方法</span><select class="qtype"><option value="noul">0〜1で判定する</option><option value="choice">選択肢から選ぶ</option><option value="score">段階で評価する</option></select></label>
+            <label class="mini-field"><span>Layaへの質問</span><input class="instructions" value="解約・離脱の意向があるか"></label>
+            <textarea class="criteria hidden">{}</textarea>
+            <div class="criteria-editor"></div>
+          </div>
         </article>
       </div>
-      <button id="run" class="button primary">Run inference</button>
+      <button id="run" class="button primary">この文章を判定する</button>
       <p id="decision-error" class="error"></p>
       <div id="decision-results" class="results hidden">
         <div class="metrics three">
@@ -92,6 +112,6 @@
 
     <footer>Server Mode · CPU-only · Tailscale private access</footer>
   </main>
-  <script src="/static/server.js"></script>
+  <script src="/static/server.js?v=3"></script>
 </body>
 </html>
