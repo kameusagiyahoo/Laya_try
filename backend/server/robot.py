@@ -58,6 +58,39 @@ class StepsOutOfRange(ValueError):
     pass
 
 
+@dataclass(frozen=True)
+class RobotIntentResolution:
+    intent: str
+    confidence: float
+    resolver: str
+
+
+INTENT_PATTERNS = {
+    "forward": re.compile(r"(?<![名午以])前|前進|直進|正面|まっすぐ|向いている方"),
+    "backward": re.compile(r"後ろ|後方|後退|バック|下が|向きを変えずに戻|向きのまま戻"),
+    "turn_left": re.compile(r"左|反時計"),
+    "turn_right": re.compile(r"右|(?<!反)時計"),
+    "stop": re.compile(r"止|停止|ストップ|中止|待機|動かない|やめ"),
+    "reset": re.compile(r"初期|リセット|最初|ホーム|スタート|原点|元の|開始位置|復帰|帰還"),
+}
+COMMAND_CUE = re.compile(r"動|進|回|向|戻|止|旋回|ターン|バック|下が|待機|復帰|帰還")
+
+
+def resolve_robot_intent(
+    utterance: str, laya_intent: str, laya_confidence: float
+) -> RobotIntentResolution:
+    normalized = unicodedata.normalize("NFKC", utterance)
+    matches = [intent for intent, pattern in INTENT_PATTERNS.items() if pattern.search(normalized)]
+    if len(matches) == 1:
+        return RobotIntentResolution(matches[0], 1.0, "explicit_command")
+    if len(matches) > 1:
+        return RobotIntentResolution("unknown", 1.0, "ambiguous_command")
+    if not COMMAND_CUE.search(normalized):
+        return RobotIntentResolution("unknown", 1.0, "safety_gate")
+    intent = laya_intent if laya_intent in ROBOT_INTENTS else "unknown"
+    return RobotIntentResolution(intent, laya_confidence, "laya")
+
+
 def parse_steps(utterance: str) -> int:
     normalized = unicodedata.normalize("NFKC", utterance)
     digit = re.search(r"(?<!\d)(\d+)(?:\s*マス)?", normalized)
@@ -157,6 +190,7 @@ class RobotStore:
         confidence: float,
         threshold: float,
         source: str,
+        resolver: str = "manual",
         inference: dict[str, Any] | None = None,
         forced_rejection: str | None = None,
     ) -> dict[str, Any]:
@@ -191,6 +225,7 @@ class RobotStore:
                 "steps": steps,
                 "confidence": round(confidence, 4),
                 "source": source,
+                "resolver": resolver,
                 "applied": applied,
                 "rejection_reason": rejection,
                 "robot": self._serialize(session),

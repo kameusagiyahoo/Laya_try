@@ -96,7 +96,7 @@ def test_ui_serves_dynamic_question_builder() -> None:
         launcher = client.get("/")
         page = client.get("/decision-lab")
         robot = client.get("/robot")
-        robot_script = client.get("/static/robot.js?v=1")
+        robot_script = client.get("/static/robot.js?v=2")
         script = client.get("/static/server.js?v=9")
     assert launcher.status_code == 200
     assert 'href="/decision-lab"' in launcher.text
@@ -106,7 +106,8 @@ def test_ui_serves_dynamic_question_builder() -> None:
     assert 'id="robot-map"' in robot.text
     assert 'id="voice"' in robot.text
     assert 'id="emergency-stop"' in robot.text
-    assert "/static/robot.js?v=1" in robot.text
+    assert 'id="decision-resolver"' in robot.text
+    assert "/static/robot.js?v=2" in robot.text
     assert robot_script.status_code == 200
     assert "window.webkitSpeechRecognition" in robot_script.text
     assert "/command`" in robot_script.text

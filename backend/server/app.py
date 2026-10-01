@@ -15,7 +15,14 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
 from .inference import InferenceBackend, LayaBackend, _answer_confidence, enrich_result
-from .robot import ROBOT_COMMAND_QUESTION, ROBOT_INTENTS, RobotStore, StepsOutOfRange, parse_steps
+from .robot import (
+    ROBOT_COMMAND_QUESTION,
+    ROBOT_INTENTS,
+    RobotStore,
+    StepsOutOfRange,
+    parse_steps,
+    resolve_robot_intent,
+)
 from .routing import DEFAULT_ROUTE_QUESTION
 from .schemas import (
     AdkRunRequest,
@@ -190,7 +197,10 @@ def create_app(
         intent = str(answer.get("choice", "unknown"))
         if intent not in ROBOT_INTENTS:
             intent = "unknown"
-        confidence = _answer_confidence(answer)
+        laya_confidence = _answer_confidence(answer)
+        resolution = resolve_robot_intent(request.utterance, intent, laya_confidence)
+        intent = resolution.intent
+        confidence = resolution.confidence
         forced_rejection = None
         steps = 1
         if intent in {"forward", "backward"}:
@@ -203,6 +213,9 @@ def create_app(
             "device": result.get("device", settings.device),
             "inference_ms": result.get("inference_ms", 0.0),
             "probabilities": answer.get("probabilities", {}),
+            "raw_intent": str(answer.get("choice", "unknown")),
+            "raw_confidence": round(laya_confidence, 4),
+            "resolver": resolution.resolver,
         }
         try:
             return robot_store.apply(
@@ -214,6 +227,7 @@ def create_app(
                 confidence=confidence,
                 threshold=settings.robot_confidence_threshold,
                 source="voice",
+                resolver=resolution.resolver,
                 inference=inference,
                 forced_rejection=forced_rejection,
             )

@@ -125,6 +125,7 @@
   window.addEventListener("resize", drawMap);
 
   const intentLabels = {forward:"前進", backward:"後退", turn_left:"左回転", turn_right:"右回転", stop:"停止", reset:"リセット", unknown:"不明"};
+  const resolverLabels = {explicit_command:"明示命令", ambiguous_command:"複合命令", safety_gate:"安全判定", laya:"Laya", manual:"手動"};
   const rejectionLabels = {low_confidence:"確信度が低いため動かしていません", unknown_command:"命令を判断できないため動かしていません", steps_out_of_range:"移動距離は1〜5マスで指定してください", collision:"進路に壁があるため動かしていません", out_of_bounds:"マップの外へ出るため動かしていません", emergency_stopped:"緊急停止中です。初期位置へ戻すと解除されます"};
   function addLog(text, result, accepted) {
     logItems.unshift({time:new Date(), text, result, accepted});
@@ -142,6 +143,7 @@
     $("decision").classList.remove("hidden");
     $("decision-intent").textContent = `${intentLabels[data.intent] || data.intent}${["forward","backward"].includes(data.intent) ? ` × ${data.steps}` : ""}`;
     $("decision-confidence").textContent = percent(data.confidence);
+    $("decision-resolver").textContent = resolverLabels[data.resolver] || data.resolver || "—";
     $("asr-time").textContent = milliseconds(lastAsrMs);
     $("decision-time").textContent = milliseconds(data.inference?.inference_ms);
     const message = data.applied ? "安全確認済み・実行しました" : (rejectionLabels[data.rejection_reason] || "実行しませんでした");

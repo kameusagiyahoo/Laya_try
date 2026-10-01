@@ -183,6 +183,8 @@ FastAPIは `127.0.0.1:8000` のみにbindし、Tailscale Serveがtailnet内向�
 - セッション、位置、軌跡、command IDはFastAPIプロセスのメモリ上で管理します。サーバー再起動後は新しいセッションになります。
 - 現在は2Dシミュレーター専用で、実機ロボットは制御しません。
 
+安全のため、明示的な方向語は決定的resolver、複数動作を含む命令は `unknown`、操作語のない文章はsafety gateで `unknown` にします。Layaのraw intent・confidence・probabilitiesはレスポンスの `inference` に残り、UIには最終判断経路を表示します。
+
 主要API:
 
 ```text
@@ -281,6 +283,10 @@ mock backendで `/health`、`/api/predict`、confidence fallback、ADK routing�
 ```bash
 RUN_LAYA_E2E=1 .venv/bin/python -m pytest backend/tests/e2e -m e2e -q
 ```
+
+実モデルE2Eは `backend/tests/fixtures/robot_intents_ja.json` の日本語105文について、Laya raw精度、最終判定精度、intent別精度、高confidence誤判定、mean / p95を集計します。
+
+2026-10-02のCPU実測: Laya raw top-1 `74.29%`、安全resolver後 `100% (105/105)`、高confidence誤判定 `0`、mean `206.5 ms`、p95 `245.7 ms`。データセット内の結果であり、未知の発話に対する精度保証ではありません。
 
 ## Legacy Browser Lab（検証履歴）
 

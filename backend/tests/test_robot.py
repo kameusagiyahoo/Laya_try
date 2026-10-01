@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from collections import Counter
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -7,7 +10,10 @@ from fastapi.testclient import TestClient
 
 from backend.server.app import create_app
 from backend.server.config import Settings
-from backend.server.robot import parse_steps
+from backend.server.robot import parse_steps, resolve_robot_intent
+
+
+DATASET = Path(__file__).parent / "fixtures" / "robot_intents_ja.json"
 
 
 class RobotMockBackend:
@@ -52,6 +58,32 @@ def create_session(client: TestClient, headers: dict[str, str] | None = None) ->
     response = client.post("/api/robot/sessions", headers=headers or {})
     assert response.status_code == 200
     return response.json()["session_id"]
+
+
+def test_robot_intent_dataset_is_balanced_and_unique() -> None:
+    examples = json.loads(DATASET.read_text(encoding="utf-8"))
+    counts = Counter(example["intent"] for example in examples)
+    assert len(examples) == 105
+    assert counts == {
+        "forward": 15,
+        "backward": 15,
+        "turn_left": 15,
+        "turn_right": 15,
+        "stop": 15,
+        "reset": 15,
+        "unknown": 15,
+    }
+    assert len({example["utterance"] for example in examples}) == len(examples)
+
+
+def test_explicit_intent_resolver_covers_dataset_safely() -> None:
+    examples = json.loads(DATASET.read_text(encoding="utf-8"))
+    for example in examples:
+        resolution = resolve_robot_intent(example["utterance"], "forward", 0.99)
+        assert resolution.intent == example["intent"], example
+    compound = resolve_robot_intent("前へ進んでから右を向いて", "forward", 0.99)
+    assert compound.intent == "unknown"
+    assert compound.resolver == "ambiguous_command"
 
 
 @pytest.mark.parametrize(
@@ -115,7 +147,7 @@ def test_low_confidence_and_out_of_range_do_not_move() -> None:
         low_session = create_session(low_client)
         low = low_client.post(
             f"/api/robot/{low_session}/command",
-            json={"command_id": "voice-low1", "utterance": "前へ進んで"},
+            json={"command_id": "voice-low1", "utterance": "少し動いて"},
         )
     assert low.json()["applied"] is False
     assert low.json()["rejection_reason"] == "low_confidence"
