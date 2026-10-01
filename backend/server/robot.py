@@ -221,6 +221,8 @@ class RobotStore:
     def undo(self, session_id: str) -> dict[str, Any]:
         with self._lock:
             session = self._require(session_id)
+            if session.emergency_stopped:
+                return self._serialize(session)
             if session.history:
                 session.restore(session.history.pop())
                 session.last_command = "undo"
@@ -296,6 +298,6 @@ class RobotStore:
             "home": {"x": HOME[0], "y": HOME[1]},
             "walls": [{"x": x, "y": y} for x, y in sorted(WALLS)],
             "trail": [{"x": x, "y": y} for x, y in session.trail],
-            "can_undo": bool(session.history),
+            "can_undo": bool(session.history) and not session.emergency_stopped,
             "last_command": session.last_command,
         }

@@ -155,6 +155,7 @@ def test_stop_blocks_commands_until_reset_and_undo_restores() -> None:
         )
         undone = client.post(f"/api/robot/{session_id}/undo")
         stopped = client.post(f"/api/robot/{session_id}/stop")
+        stopped_undo = client.post(f"/api/robot/{session_id}/undo")
         blocked = client.post(
             f"/api/robot/{session_id}/manual",
             json={"command_id": "manual-block", "intent": "forward", "steps": 1},
@@ -162,6 +163,9 @@ def test_stop_blocks_commands_until_reset_and_undo_restores() -> None:
         reset = client.post(f"/api/robot/{session_id}/reset")
     assert undone.json()["y"] == 8
     assert stopped.json()["emergency_stopped"] is True
+    assert stopped.json()["can_undo"] is False
+    assert stopped_undo.json()["emergency_stopped"] is True
+    assert stopped_undo.json()["last_command"] == "stop"
     assert blocked.json()["applied"] is False
     assert blocked.json()["rejection_reason"] == "emergency_stopped"
     assert reset.json()["emergency_stopped"] is False
