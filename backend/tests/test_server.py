@@ -93,9 +93,15 @@ def test_health_reports_cpu_preloaded() -> None:
 def test_ui_serves_dynamic_question_builder() -> None:
     client, _ = make_client()
     with client:
-        page = client.get("/")
+        launcher = client.get("/")
+        page = client.get("/decision-lab")
+        robot = client.get("/robot")
         script = client.get("/static/server.js?v=9")
+    assert launcher.status_code == 200
+    assert 'href="/decision-lab"' in launcher.text
+    assert 'href="/robot"' in launcher.text
     assert page.status_code == 200
+    assert robot.status_code == 200
     assert 'id="add-question"' in page.text
     assert 'id="primary-question"' in page.text
     assert 'id="route-question"' in page.text

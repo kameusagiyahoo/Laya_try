@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111d">
+  <title>Laya Try — Demos</title>
+  <link rel="stylesheet" href="/static/launcher.css?v=1">
+</head>
+<body>
+  <main class="launcher">
+    <header>
+      <p class="eyebrow">LAYA TRY / CPU SERVER</p>
+      <div class="status-line"><span id="server-dot"></span><strong id="server-status">接続確認中</strong></div>
+      <h1>Choose a demo.</h1>
+      <p>Ubuntu PCに常駐するLayaを、iPhoneからTailscale経由で利用します。</p>
+    </header>
+
+    <nav class="demo-grid" aria-label="機能を選択">
+      <a class="demo-card decision" href="/decision-lab">
+        <span class="number">01</span>
+        <div><small>TEXT DECISION</small><h2>Decision Lab</h2><p>文章をchoice / score / noulで判定し、ADK 2へrouteします。</p></div>
+        <span class="arrow" aria-hidden="true">→</span>
+      </a>
+      <a class="demo-card robot" href="/robot">
+        <span class="number">02</span>
+        <div><small>VOICE CONTROL</small><h2>Voice Robot</h2><p>日本語の音声命令で、2次元マップ上のロボットを操作します。</p></div>
+        <span class="arrow" aria-hidden="true">→</span>
+      </a>
+    </nav>
+
+    <aside>
+      <strong>Server Mode</strong>
+      <span id="server-detail">CPU / multilingual / private HTTPS</span>
+    </aside>
+    <footer>モデルと推論処理はUbuntu PC側で実行されます。</footer>
+  </main>
+  <script src="/static/launcher.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+:root{color-scheme:dark;--bg:#07111d;--panel:#0d1d2d;--line:#25384d;--text:#eff7ff;--muted:#91a8bd;--mint:#67efc2;--blue:#75a9ff}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;background:radial-gradient(circle at 85% 0,#153b54 0,transparent 34%),var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,sans-serif}
+.launcher{width:min(100%,760px);margin:auto;padding:calc(34px + env(safe-area-inset-top)) 16px calc(34px + env(safe-area-inset-bottom))}
+header{padding:16px 5px 25px}
+.eyebrow{color:var(--mint);font-size:11px;font-weight:900;letter-spacing:.16em}
+.status-line{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+#server-dot{width:9px;height:9px;border-radius:50%;background:#a77b27;box-shadow:0 0 0 4px #a77b2725}
+#server-dot.online{background:var(--mint);box-shadow:0 0 0 4px #67efc225}
+#server-dot.offline{background:#ff7f8c;box-shadow:0 0 0 4px #ff7f8c25}
+h1{font-size:clamp(44px,13vw,76px);line-height:.92;letter-spacing:-.055em;margin:23px 0 17px}
+header>p:last-child{color:var(--muted);max-width:540px}
+.demo-grid{display:grid;gap:13px}
+.demo-card{position:relative;display:grid;grid-template-columns:44px 1fr 30px;gap:10px;align-items:start;min-height:190px;padding:20px;border:1px solid var(--line);border-radius:22px;color:inherit;text-decoration:none;overflow:hidden;background:linear-gradient(145deg,#112337,#091724);box-shadow:0 18px 55px #0003}
+.demo-card::after{content:"";position:absolute;width:150px;height:150px;border:30px solid #ffffff08;border-radius:50%;right:-65px;bottom:-85px}
+.demo-card.robot{background:radial-gradient(circle at 100% 0,#214b45 0,transparent 48%),linear-gradient(145deg,#102b31,#091724)}
+.number,.demo-card small{color:var(--mint);font-size:10px;font-weight:900;letter-spacing:.12em}
+.demo-card h2{font-size:29px;line-height:1.05;margin:11px 0 9px;letter-spacing:-.03em}
+.demo-card p{color:var(--muted);margin:0;max-width:430px}
+.arrow{align-self:center;font-size:25px;color:var(--mint)}
+aside{display:flex;justify-content:space-between;gap:12px;margin:17px 3px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#0a1724;color:var(--muted);font-size:11px}
+aside strong{color:var(--text)}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:22px 0}
+@media(min-width:650px){.demo-grid{grid-template-columns:1fr 1fr}.demo-card{grid-template-columns:38px 1fr 24px;min-height:260px}.demo-card h2{font-size:34px}}

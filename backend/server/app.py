@@ -82,7 +82,15 @@ def create_app(
 
     @app.get("/", include_in_schema=False)
     async def ui() -> FileResponse:
+        return FileResponse(static_dir / "launcher.html")
+
+    @app.get("/decision-lab", include_in_schema=False)
+    async def decision_lab() -> FileResponse:
         return FileResponse(static_dir / "index.html")
+
+    @app.get("/robot", include_in_schema=False)
+    async def robot_ui() -> FileResponse:
+        return FileResponse(static_dir / "robot.html")
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
