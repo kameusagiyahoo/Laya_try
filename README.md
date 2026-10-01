@@ -161,6 +161,9 @@ FastAPIは `127.0.0.1:8000` のみにbindし、Tailscale Serveがtailnet内向�
 4. `ONLINE / CPU / multilingual / READY` を確認します。
 5. `LAYA_API_KEY` を設定した場合は、画面のBearer Token欄へ入力します。値はSafariのsessionStorageだけに保存されます。
 6. Decision Labでは判定項目を追加・削除でき、表示名、質問ID、choice / score / noul、主結果、ADK route対象を編集できます。判定設定はSafariのlocalStorageへ自動保存されます。
+7. 「音声入力」を押してマイクを許可すると、日本語の認識結果が判定文章の末尾へ追加されます。ブラウザが音声認識に未対応の場合は、文章欄を選びiPhoneキーボードのマイクを使用してください。
+
+音声認識には利用可能な場合はSafariのWeb Speech API、未対応時はiOS標準キーボードを使います。FastAPIへ送信するのは認識後の文字列だけで、音声データをLayaサーバーへ保存・送信する実装ではありません。
 
 モデルデータはUbuntu PC上だけにあり、iPhoneへダウンロードされません。
 

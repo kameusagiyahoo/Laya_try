@@ -94,15 +94,19 @@ def test_ui_serves_dynamic_question_builder() -> None:
     client, _ = make_client()
     with client:
         page = client.get("/")
-        script = client.get("/static/server.js?v=8")
+        script = client.get("/static/server.js?v=9")
     assert page.status_code == 200
     assert 'id="add-question"' in page.text
     assert 'id="primary-question"' in page.text
     assert 'id="route-question"' in page.text
-    assert "/static/server.js?v=8" in page.text
+    assert 'id="voice-input"' in page.text
+    assert 'id="voice-status"' in page.text
+    assert "/static/server.js?v=9" in page.text
     assert script.status_code == 200
     assert "route_question:routeQuestion" in script.text
     assert "laya-decision-config-v1" in script.text
+    assert "window.webkitSpeechRecognition" in script.text
+    assert 'recognition.lang = "ja-JP"' in script.text
 
 
 def test_predict_has_required_observability_fields(questions: dict[str, Any]) -> None:

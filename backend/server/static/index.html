@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#08111d">
   <title>Laya Try — Server Mode</title>
-  <link rel="stylesheet" href="/static/server.css?v=8">
+  <link rel="stylesheet" href="/static/server.css?v=9">
 </head>
 <body>
   <main class="shell">
@@ -40,7 +40,16 @@
         <button class="chip" type="button" data-state-preset="sales">料金相談</button>
         <button class="chip" type="button" data-state-preset="ambiguous">曖昧な相談</button>
       </div>
-      <label class="field"><span>判定する文章</span><textarea id="state" rows="5" placeholder="ここに自由な文章を入力してください">二重請求されています。返金してください。</textarea></label>
+      <div class="field voice-field">
+        <div class="field-heading">
+          <label for="state">判定する文章</label>
+          <button id="voice-input" class="voice-button" type="button" aria-pressed="false">
+            <span class="voice-dot" aria-hidden="true"></span><span id="voice-label">音声入力</span>
+          </button>
+        </div>
+        <textarea id="state" rows="5" placeholder="ここに自由な文章を入力してください">二重請求されています。返金してください。</textarea>
+        <p id="voice-status" class="voice-status" role="status" aria-live="polite">認識した文章を末尾へ追加します。</p>
+      </div>
       <div class="question-toolbar">
         <div><strong>判定項目</strong><small>使う項目だけONにします</small></div>
         <div class="question-actions">
@@ -100,6 +109,6 @@
 
     <footer>Server Mode · CPU-only · Tailscale private access</footer>
   </main>
-  <script src="/static/server.js?v=8"></script>
+  <script src="/static/server.js?v=9"></script>
 </body>
 </html>

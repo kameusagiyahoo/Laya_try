@@ -119,6 +119,82 @@
   }));
   $("state").addEventListener("input", () => document.querySelectorAll("[data-state-preset]").forEach(item => item.classList.remove("active")));
 
+  const voiceButton = $("voice-input");
+  const voiceStatus = $("voice-status");
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let voiceListening = false;
+  let voiceBase = "";
+  let voiceHadResult = false;
+  let voiceErrorCode = "";
+
+  function setVoiceStatus(message, isError = false) {
+    voiceStatus.textContent = message;
+    voiceStatus.classList.toggle("error", isError);
+  }
+  function setVoiceListening(listening) {
+    voiceListening = listening;
+    voiceButton.classList.toggle("listening", listening);
+    voiceButton.setAttribute("aria-pressed", String(listening));
+    $("voice-label").textContent = listening ? "停止" : "音声入力";
+  }
+  function voiceErrorMessage(code) {
+    if (code === "not-allowed" || code === "service-not-allowed") return "マイクを利用できません。SafariのWebサイト設定でマイクを許可してください。";
+    if (code === "audio-capture") return "マイクが見つかりません。ほかのアプリが使用していないか確認してください。";
+    if (code === "no-speech") return "音声を認識できませんでした。もう一度押して、はっきり話してください。";
+    if (code === "network") return "音声認識へ接続できません。通信状態を確認してください。";
+    return "音声認識を開始できませんでした。iPhoneキーボードのマイクも利用できます。";
+  }
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = "ja-JP";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => {
+      setVoiceListening(true);
+      setVoiceStatus("聞いています。話し終えると自動で文字になります。");
+    };
+    recognition.onresult = event => {
+      let transcript = "";
+      for (let index = 0; index < event.results.length; index += 1) transcript += event.results[index][0].transcript;
+      voiceHadResult = Boolean(transcript.trim());
+      const separator = voiceBase && transcript && !/[\s\n]$/.test(voiceBase) ? "\n" : "";
+      $("state").value = `${voiceBase}${separator}${transcript}`;
+      $("state").dispatchEvent(new Event("input", {bubbles:true}));
+      setVoiceStatus("認識中… 話し終わるまでお待ちください。");
+    };
+    recognition.onerror = event => {
+      voiceErrorCode = event.error;
+      if (event.error === "aborted") setVoiceStatus("音声入力を停止しました。");
+      else setVoiceStatus(voiceErrorMessage(event.error), true);
+    };
+    recognition.onend = () => {
+      setVoiceListening(false);
+      if (!voiceErrorCode) setVoiceStatus(voiceHadResult ? "音声を文章へ追加しました。続ける場合はもう一度押してください。" : "音声入力を終了しました。");
+    };
+  } else {
+    setVoiceStatus("このブラウザでは音声ボタンを利用できません。文章欄を選び、iPhoneキーボードのマイクを使ってください。");
+  }
+  voiceButton.addEventListener("click", () => {
+    if (!recognition) {
+      $("state").focus();
+      setVoiceStatus("iPhoneキーボードのマイクを押して音声入力してください。", true);
+      return;
+    }
+    if (voiceListening) {
+      setVoiceStatus("停止しています…");
+      recognition.stop();
+      return;
+    }
+    voiceBase = $("state").value.trimEnd();
+    voiceHadResult = false;
+    voiceErrorCode = "";
+    try { recognition.start(); }
+    catch (_) { setVoiceStatus("音声入力はすでに起動しています。少し待ってからもう一度お試しください。", true); }
+  });
+  window.addEventListener("pagehide", () => { if (recognition && voiceListening) recognition.abort(); });
+
   const CONFIG_KEY = "laya-decision-config-v1";
   const questionDefaults = [
     {id:"department", displayName:"担当部署", enabled:true, type:"choice", instructions:"どの担当へ送るべきか", criteria:{billing:"請求・返金", technical:"障害・技術問題", sales:"料金・契約", other:"その他"}, open:true},
