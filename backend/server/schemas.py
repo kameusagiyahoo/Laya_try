@@ -110,4 +110,20 @@ class AdkRunRequest(BaseModel):
         return self
 
 
+class RobotCommandRequest(BaseModel):
+    command_id: str = Field(min_length=8, max_length=128)
+    utterance: str = Field(min_length=1, max_length=2_000)
+
+
+class RobotManualRequest(BaseModel):
+    command_id: str = Field(min_length=8, max_length=128)
+    intent: Literal["forward", "backward", "turn_left", "turn_right"]
+    steps: int = Field(default=1, ge=1, le=5)
+
+
+class RobotBenchmarkRequest(BaseModel):
+    iterations: int = Field(default=50, ge=1, le=500)
+    utterance: str = Field(default="前へ進んで", min_length=1, max_length=2_000)
+
+
 RouteName = Literal["billing", "technical", "sales", "other", "human"]

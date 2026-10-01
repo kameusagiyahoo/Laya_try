@@ -35,6 +35,7 @@ class Settings:
     max_loaded: int = 1
     max_concurrent: int = 4
     confidence_threshold: float = 0.70
+    robot_confidence_threshold: float = 0.80
     api_key: str | None = None
     host: str = "127.0.0.1"
     port: int = 8000
@@ -51,6 +52,9 @@ class Settings:
             max_loaded=_int_env("LAYA_MAX_LOADED", 1),
             max_concurrent=_int_env("LAYA_MAX_CONCURRENT", 4),
             confidence_threshold=min(1.0, max(0.0, _float_env("LAYA_CONFIDENCE_THRESHOLD", 0.70))),
+            robot_confidence_threshold=min(
+                1.0, max(0.0, _float_env("LAYA_ROBOT_CONFIDENCE_THRESHOLD", 0.80))
+            ),
             api_key=os.getenv("LAYA_API_KEY") or None,
             host=os.getenv("LAYA_HOST", "127.0.0.1"),
             port=_int_env("LAYA_PORT", 8000),

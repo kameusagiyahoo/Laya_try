@@ -14,9 +14,17 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
-from .inference import InferenceBackend, LayaBackend, enrich_result
+from .inference import InferenceBackend, LayaBackend, _answer_confidence, enrich_result
+from .robot import ROBOT_COMMAND_QUESTION, ROBOT_INTENTS, RobotStore, StepsOutOfRange, parse_steps
 from .routing import DEFAULT_ROUTE_QUESTION
-from .schemas import AdkRunRequest, BenchmarkRequest, PredictRequest
+from .schemas import (
+    AdkRunRequest,
+    BenchmarkRequest,
+    PredictRequest,
+    RobotBenchmarkRequest,
+    RobotCommandRequest,
+    RobotManualRequest,
+)
 
 
 def _percentile(values: list[float], percentile: float) -> float:
@@ -31,6 +39,7 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     backend = backend or LayaBackend(settings)
+    robot_store = RobotStore()
     inference_lock = asyncio.Lock()
     admission_lock = asyncio.Lock()
     admitted_requests = 0
@@ -148,5 +157,136 @@ def create_app(
         async with admission_slot():
             questions = request.questions or DEFAULT_ROUTE_QUESTION
             return await adk_runtime.run(request.state, questions, request.route_question)
+
+    def robot_state(session_id: str) -> dict[str, Any]:
+        try:
+            return robot_store.state(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="robot session not found") from exc
+
+    @app.post("/api/robot/sessions", dependencies=[Depends(authorize)])
+    async def create_robot_session() -> dict[str, Any]:
+        return robot_store.create()
+
+    @app.get("/api/robot/{session_id}/state", dependencies=[Depends(authorize)])
+    async def get_robot_state(session_id: str) -> dict[str, Any]:
+        return robot_state(session_id)
+
+    @app.post("/api/robot/{session_id}/command", dependencies=[Depends(authorize)])
+    async def robot_command(
+        session_id: str, request: RobotCommandRequest
+    ) -> dict[str, Any]:
+        robot_state(session_id)
+        try:
+            cached = robot_store.cached(session_id, request.command_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="robot session not found") from exc
+        if cached is not None:
+            return cached
+
+        async with admission_slot():
+            result = await infer(request.utterance, ROBOT_COMMAND_QUESTION)
+        answer = (result.get("answers") or {}).get("command") or {}
+        intent = str(answer.get("choice", "unknown"))
+        if intent not in ROBOT_INTENTS:
+            intent = "unknown"
+        confidence = _answer_confidence(answer)
+        forced_rejection = None
+        steps = 1
+        if intent in {"forward", "backward"}:
+            try:
+                steps = parse_steps(request.utterance)
+            except StepsOutOfRange:
+                forced_rejection = "steps_out_of_range"
+        inference = {
+            "model": result.get("model", settings.model),
+            "device": result.get("device", settings.device),
+            "inference_ms": result.get("inference_ms", 0.0),
+            "probabilities": answer.get("probabilities", {}),
+        }
+        try:
+            return robot_store.apply(
+                session_id,
+                command_id=request.command_id,
+                utterance=request.utterance,
+                intent=intent,
+                steps=steps,
+                confidence=confidence,
+                threshold=settings.robot_confidence_threshold,
+                source="voice",
+                inference=inference,
+                forced_rejection=forced_rejection,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="robot session not found") from exc
+
+    @app.post("/api/robot/{session_id}/manual", dependencies=[Depends(authorize)])
+    async def robot_manual(
+        session_id: str, request: RobotManualRequest
+    ) -> dict[str, Any]:
+        robot_state(session_id)
+        try:
+            return robot_store.apply(
+                session_id,
+                command_id=request.command_id,
+                utterance=request.intent,
+                intent=request.intent,
+                steps=request.steps,
+                confidence=1.0,
+                threshold=0.0,
+                source="manual",
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="robot session not found") from exc
+
+    @app.post("/api/robot/{session_id}/stop", dependencies=[Depends(authorize)])
+    async def robot_stop(session_id: str) -> dict[str, Any]:
+        try:
+            return robot_store.emergency_stop(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="robot session not found") from exc
+
+    @app.post("/api/robot/{session_id}/undo", dependencies=[Depends(authorize)])
+    async def robot_undo(session_id: str) -> dict[str, Any]:
+        try:
+            return robot_store.undo(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="robot session not found") from exc
+
+    @app.post("/api/robot/{session_id}/reset", dependencies=[Depends(authorize)])
+    async def robot_reset(session_id: str) -> dict[str, Any]:
+        try:
+            return robot_store.reset(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="robot session not found") from exc
+
+    @app.post("/api/robot/benchmark", dependencies=[Depends(authorize)])
+    async def robot_benchmark(request: RobotBenchmarkRequest) -> dict[str, Any]:
+        async with admission_slot():
+            warmup_started = time.perf_counter()
+            await infer(request.utterance, ROBOT_COMMAND_QUESTION)
+            warmup_ms = (time.perf_counter() - warmup_started) * 1000
+            samples: list[float] = []
+            failures = 0
+            for _ in range(request.iterations):
+                try:
+                    result = await infer(request.utterance, ROBOT_COMMAND_QUESTION)
+                    samples.append(float(result["inference_ms"]))
+                except Exception:
+                    failures += 1
+            if not samples:
+                raise HTTPException(status_code=500, detail="all robot benchmark iterations failed")
+            return {
+                "warmup_ms": round(warmup_ms, 3),
+                "mean_ms": round(statistics.fmean(samples), 3),
+                "p50_ms": round(_percentile(samples, 0.50), 3),
+                "p95_ms": round(_percentile(samples, 0.95), 3),
+                "min_ms": round(min(samples), 3),
+                "max_ms": round(max(samples), 3),
+                "failures": failures,
+                "iterations": request.iterations,
+                "model": settings.model,
+                "device": settings.device,
+            }
 
     return app
