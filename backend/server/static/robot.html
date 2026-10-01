@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#07131b">
   <title>Voice Robot — Laya Try</title>
-  <link rel="stylesheet" href="/static/robot.css?v=1">
+  <link rel="stylesheet" href="/static/robot.css?v=2">
 </head>
 <body>
   <main class="robot-shell">
@@ -15,6 +15,19 @@
       <h1>Speak.<br>Then move.</h1>
       <p>日本語の命令をLayaが判定し、安全確認後に2Dロボットを動かします。</p>
     </header>
+
+    <section id="control-panel" class="panel control-panel" aria-live="polite">
+      <div>
+        <small>CONTROL</small>
+        <strong id="control-status">確認中</strong>
+        <span id="control-detail">操作セッションへ接続しています。</span>
+      </div>
+      <div class="control-actions">
+        <button id="acquire-control" class="primary-button hidden" type="button">操作権を取得</button>
+        <button id="release-control" class="secondary-button hidden" type="button">操作を終了</button>
+        <button id="share-session" class="secondary-button" type="button">共有URLをコピー</button>
+      </div>
+    </section>
 
     <section class="panel map-panel">
       <div class="panel-head"><div><span class="step">01</span><h2>Live Map</h2></div><b id="robot-mode" class="mode">READY</b></div>
@@ -67,6 +80,6 @@
 
     <footer>Simulation only · Server-authoritative safety · Tailscale private access</footer>
   </main>
-  <script src="/static/robot.js?v=2"></script>
+  <script src="/static/robot.js?v=3"></script>
 </body>
 </html>

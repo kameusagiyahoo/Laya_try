@@ -10,7 +10,13 @@ from fastapi.testclient import TestClient
 
 from backend.server.app import create_app
 from backend.server.config import Settings
-from backend.server.robot import parse_steps, resolve_robot_intent
+from backend.server.robot import (
+    RobotControllerDenied,
+    RobotLeaseConflict,
+    RobotStore,
+    parse_steps,
+    resolve_robot_intent,
+)
 
 
 DATASET = Path(__file__).parent / "fixtures" / "robot_intents_ja.json"
@@ -57,6 +63,7 @@ def robot_client(
 def create_session(client: TestClient, headers: dict[str, str] | None = None) -> str:
     response = client.post("/api/robot/sessions", headers=headers or {})
     assert response.status_code == 200
+    client.headers["X-Robot-Controller"] = response.json()["controller_token"]
     return response.json()["session_id"]
 
 
@@ -105,6 +112,7 @@ def test_robot_session_and_manual_movement() -> None:
         state = client.get(f"/api/robot/{session_id}/state")
     assert response.status_code == 200
     assert response.json()["applied"] is True
+    assert response.json()["robot"]["control"]["is_controller"] is True
     assert state.json()["x"] == 1
     assert state.json()["y"] == 5
     assert len(state.json()["trail"]) == 4
@@ -214,6 +222,75 @@ def test_robot_authentication_and_missing_session() -> None:
     assert unauthorized.status_code == 401
     assert missing.status_code == 404
     assert valid.status_code == 200
+
+
+def test_robot_controller_lease_allows_observers_and_blocks_mutation() -> None:
+    client, _ = robot_client()
+    with client:
+        session_id = create_session(client)
+        controller_token = client.headers["X-Robot-Controller"]
+        observer = client.get(
+            f"/api/robot/{session_id}/state", headers={"X-Robot-Controller": ""}
+        )
+        blocked = client.post(
+            f"/api/robot/{session_id}/manual",
+            headers={"X-Robot-Controller": "observer-token"},
+            json={"command_id": "observer-0001", "intent": "forward", "steps": 1},
+        )
+        conflict = client.post(
+            f"/api/robot/{session_id}/lease/acquire",
+            headers={"X-Robot-Controller-ID": "second-device"},
+        )
+        heartbeat = client.post(
+            f"/api/robot/{session_id}/lease/heartbeat",
+            headers={"X-Robot-Controller": controller_token},
+        )
+        released = client.post(
+            f"/api/robot/{session_id}/lease/release",
+            headers={"X-Robot-Controller": controller_token},
+        )
+        acquired = client.post(
+            f"/api/robot/{session_id}/lease/acquire",
+            headers={"X-Robot-Controller-ID": "second-device"},
+        )
+    assert observer.status_code == 200
+    assert observer.json()["control"]["is_controller"] is False
+    assert blocked.status_code == 403
+    assert conflict.status_code == 409
+    assert heartbeat.json()["control"]["is_controller"] is True
+    assert released.json()["control"]["available"] is True
+    assert acquired.status_code == 200
+    assert acquired.json()["control"]["controller_id"] == "second-device"
+
+
+def test_robot_store_expires_lease_and_inactive_session() -> None:
+    now = [100.0]
+    store = RobotStore(
+        session_ttl_seconds=60,
+        lease_seconds=10,
+        max_sessions=2,
+        clock=lambda: now[0],
+    )
+    created = store.create("device-a")
+    session_id = created["session_id"]
+    token = created["controller_token"]
+    assert store.state(session_id, token)["control"]["is_controller"] is True
+
+    now[0] += 11
+    state = store.state(session_id, token)
+    assert state["control"]["available"] is True
+    with pytest.raises(RobotControllerDenied):
+        store.heartbeat(session_id, token)
+
+    second = store.acquire(session_id, "device-b")
+    with pytest.raises(RobotLeaseConflict):
+        store.acquire(session_id, "device-c")
+    assert second["control"]["is_controller"] is True
+
+    now[0] += 60
+    assert store.cleanup() == 1
+    with pytest.raises(KeyError):
+        store.state(session_id)
 
 
 def test_robot_benchmark_excludes_warmup() -> None:

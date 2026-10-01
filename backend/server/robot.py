@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import hmac
+import math
 import re
+import secrets
 import threading
+import time
 import unicodedata
 import uuid
 from dataclasses import dataclass, field
@@ -55,6 +60,14 @@ ROBOT_COMMAND_QUESTION: dict[str, dict[str, Any]] = {
 
 
 class StepsOutOfRange(ValueError):
+    pass
+
+
+class RobotControllerDenied(PermissionError):
+    pass
+
+
+class RobotLeaseConflict(RuntimeError):
     pass
 
 
@@ -132,6 +145,8 @@ class RobotSnapshot:
 @dataclass
 class RobotSession:
     session_id: str
+    created_at: float
+    last_accessed_at: float
     x: int = HOME[0]
     y: int = HOME[1]
     direction: str = "north"
@@ -140,6 +155,9 @@ class RobotSession:
     history: list[RobotSnapshot] = field(default_factory=list)
     responses: dict[str, dict[str, Any]] = field(default_factory=dict)
     last_command: str | None = None
+    controller_id: str | None = None
+    controller_token_hash: str | None = None
+    lease_expires_at: float = 0.0
 
     def snapshot(self) -> RobotSnapshot:
         return RobotSnapshot(
@@ -159,23 +177,95 @@ class RobotSession:
 
 
 class RobotStore:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        session_ttl_seconds: int = 3600,
+        lease_seconds: int = 30,
+        max_sessions: int = 100,
+        clock: Any = time.monotonic,
+    ) -> None:
         self._sessions: dict[str, RobotSession] = {}
         self._lock = threading.Lock()
+        self._session_ttl_seconds = session_ttl_seconds
+        self._lease_seconds = lease_seconds
+        self._max_sessions = max_sessions
+        self._clock = clock
 
-    def create(self) -> dict[str, Any]:
+    def create(self, controller_id: str) -> dict[str, Any]:
         with self._lock:
-            session = RobotSession(session_id=uuid.uuid4().hex)
+            now = self._clock()
+            self._cleanup(now)
+            if len(self._sessions) >= self._max_sessions:
+                oldest = min(self._sessions.values(), key=lambda item: item.last_accessed_at)
+                del self._sessions[oldest.session_id]
+            session = RobotSession(
+                session_id=uuid.uuid4().hex,
+                created_at=now,
+                last_accessed_at=now,
+            )
             self._sessions[session.session_id] = session
-            return self._serialize(session)
+            token = self._grant(session, controller_id, now)
+            result = self._serialize(session, token, now)
+            result["controller_token"] = token
+            return result
 
-    def state(self, session_id: str) -> dict[str, Any]:
+    def state(self, session_id: str, controller_token: str | None = None) -> dict[str, Any]:
         with self._lock:
-            return self._serialize(self._require(session_id))
+            now = self._clock()
+            session = self._require(session_id, now)
+            return self._serialize(session, controller_token, now)
 
-    def cached(self, session_id: str, command_id: str) -> dict[str, Any] | None:
+    def acquire(self, session_id: str, controller_id: str) -> dict[str, Any]:
         with self._lock:
-            session = self._require(session_id)
+            now = self._clock()
+            session = self._require(session_id, now)
+            self._expire_lease(session, now)
+            if session.controller_token_hash is not None:
+                raise RobotLeaseConflict("robot controller lease is already held")
+            token = self._grant(session, controller_id, now)
+            result = self._serialize(session, token, now)
+            result["controller_token"] = token
+            return result
+
+    def heartbeat(self, session_id: str, controller_token: str) -> dict[str, Any]:
+        with self._lock:
+            now = self._clock()
+            session = self._require_controller(session_id, controller_token, now)
+            session.lease_expires_at = now + self._lease_seconds
+            return self._serialize(session, controller_token, now)
+
+    def release(self, session_id: str, controller_token: str) -> dict[str, Any]:
+        with self._lock:
+            now = self._clock()
+            session = self._require_controller(session_id, controller_token, now)
+            session.controller_id = None
+            session.controller_token_hash = None
+            session.lease_expires_at = 0.0
+            return self._serialize(session, None, now)
+
+    def cleanup(self) -> int:
+        with self._lock:
+            return self._cleanup(self._clock())
+
+    def stats(self) -> dict[str, int]:
+        with self._lock:
+            now = self._clock()
+            self._cleanup(now)
+            for session in self._sessions.values():
+                self._expire_lease(session, now)
+            return {
+                "active_sessions": len(self._sessions),
+                "controlled_sessions": sum(
+                    session.controller_token_hash is not None for session in self._sessions.values()
+                ),
+            }
+
+    def cached(
+        self, session_id: str, command_id: str, controller_token: str
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            session = self._require_controller(session_id, controller_token, self._clock())
             response = session.responses.get(command_id)
             return copy.deepcopy(response) if response is not None else None
 
@@ -193,9 +283,10 @@ class RobotStore:
         resolver: str = "manual",
         inference: dict[str, Any] | None = None,
         forced_rejection: str | None = None,
+        controller_token: str,
     ) -> dict[str, Any]:
         with self._lock:
-            session = self._require(session_id)
+            session = self._require_controller(session_id, controller_token, self._clock())
             if command_id in session.responses:
                 return copy.deepcopy(session.responses[command_id])
 
@@ -228,7 +319,7 @@ class RobotStore:
                 "resolver": resolver,
                 "applied": applied,
                 "rejection_reason": rejection,
-                "robot": self._serialize(session),
+                "robot": self._serialize(session, controller_token),
                 "inference": inference,
             }
             session.responses[command_id] = copy.deepcopy(response)
@@ -236,32 +327,32 @@ class RobotStore:
                 session.responses.pop(next(iter(session.responses)))
             return response
 
-    def emergency_stop(self, session_id: str) -> dict[str, Any]:
+    def emergency_stop(self, session_id: str, controller_token: str) -> dict[str, Any]:
         with self._lock:
-            session = self._require(session_id)
+            session = self._require_controller(session_id, controller_token, self._clock())
             if not session.emergency_stopped:
                 self._remember(session)
             session.emergency_stopped = True
             session.last_command = "stop"
-            return self._serialize(session)
+            return self._serialize(session, controller_token)
 
-    def reset(self, session_id: str) -> dict[str, Any]:
+    def reset(self, session_id: str, controller_token: str) -> dict[str, Any]:
         with self._lock:
-            session = self._require(session_id)
+            session = self._require_controller(session_id, controller_token, self._clock())
             self._remember(session)
             self._reset(session)
             session.last_command = "reset"
-            return self._serialize(session)
+            return self._serialize(session, controller_token)
 
-    def undo(self, session_id: str) -> dict[str, Any]:
+    def undo(self, session_id: str, controller_token: str) -> dict[str, Any]:
         with self._lock:
-            session = self._require(session_id)
+            session = self._require_controller(session_id, controller_token, self._clock())
             if session.emergency_stopped:
-                return self._serialize(session)
+                return self._serialize(session, controller_token)
             if session.history:
                 session.restore(session.history.pop())
                 session.last_command = "undo"
-            return self._serialize(session)
+            return self._serialize(session, controller_token)
 
     def _apply_safe(self, session: RobotSession, intent: str, steps: int) -> str | None:
         if intent == "stop":
@@ -315,14 +406,68 @@ class RobotStore:
         if len(session.history) > 50:
             session.history.pop(0)
 
-    def _require(self, session_id: str) -> RobotSession:
+    def _require(self, session_id: str, now: float) -> RobotSession:
+        self._cleanup(now)
         try:
-            return self._sessions[session_id]
+            session = self._sessions[session_id]
         except KeyError as exc:
             raise KeyError("robot session not found") from exc
+        session.last_accessed_at = now
+        self._expire_lease(session, now)
+        return session
+
+    def _require_controller(
+        self, session_id: str, controller_token: str, now: float
+    ) -> RobotSession:
+        session = self._require(session_id, now)
+        if not self._is_controller(session, controller_token, now):
+            raise RobotControllerDenied("robot controller lease is missing or expired")
+        return session
+
+    def _grant(self, session: RobotSession, controller_id: str, now: float) -> str:
+        token = secrets.token_urlsafe(32)
+        session.controller_id = controller_id[:128]
+        session.controller_token_hash = self._token_hash(token)
+        session.lease_expires_at = now + self._lease_seconds
+        return token
 
     @staticmethod
-    def _serialize(session: RobotSession) -> dict[str, Any]:
+    def _token_hash(token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8", "surrogateescape")).hexdigest()
+
+    def _is_controller(
+        self, session: RobotSession, controller_token: str | None, now: float
+    ) -> bool:
+        self._expire_lease(session, now)
+        if not controller_token or session.controller_token_hash is None:
+            return False
+        return hmac.compare_digest(
+            session.controller_token_hash,
+            self._token_hash(controller_token),
+        )
+
+    @staticmethod
+    def _expire_lease(session: RobotSession, now: float) -> None:
+        if session.controller_token_hash is not None and session.lease_expires_at <= now:
+            session.controller_id = None
+            session.controller_token_hash = None
+            session.lease_expires_at = 0.0
+
+    def _cleanup(self, now: float) -> int:
+        expired = [
+            session_id
+            for session_id, session in self._sessions.items()
+            if now - session.last_accessed_at >= self._session_ttl_seconds
+        ]
+        for session_id in expired:
+            del self._sessions[session_id]
+        return len(expired)
+
+    def _serialize(
+        self, session: RobotSession, controller_token: str | None = None, now: float | None = None
+    ) -> dict[str, Any]:
+        now = self._clock() if now is None else now
+        self._expire_lease(session, now)
         return {
             "session_id": session.session_id,
             "grid_size": GRID_SIZE,
@@ -335,4 +480,12 @@ class RobotStore:
             "trail": [{"x": x, "y": y} for x, y in session.trail],
             "can_undo": bool(session.history) and not session.emergency_stopped,
             "last_command": session.last_command,
+            "control": {
+                "available": session.controller_token_hash is None,
+                "is_controller": self._is_controller(session, controller_token, now),
+                "controller_id": session.controller_id,
+                "expires_in_seconds": max(0, math.ceil(session.lease_expires_at - now))
+                if session.controller_token_hash is not None
+                else 0,
+            },
         }

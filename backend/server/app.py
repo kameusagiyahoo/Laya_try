@@ -5,7 +5,7 @@ import hmac
 import math
 import statistics
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,8 @@ from .inference import InferenceBackend, LayaBackend, _answer_confidence, enrich
 from .robot import (
     ROBOT_COMMAND_QUESTION,
     ROBOT_INTENTS,
+    RobotControllerDenied,
+    RobotLeaseConflict,
     RobotStore,
     StepsOutOfRange,
     parse_steps,
@@ -46,7 +48,11 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     backend = backend or LayaBackend(settings)
-    robot_store = RobotStore()
+    robot_store = RobotStore(
+        session_ttl_seconds=settings.robot_session_ttl_seconds,
+        lease_seconds=settings.robot_lease_seconds,
+        max_sessions=settings.robot_max_sessions,
+    )
     inference_lock = asyncio.Lock()
     admission_lock = asyncio.Lock()
     admitted_requests = 0
@@ -54,7 +60,18 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         await asyncio.to_thread(backend.start)
-        yield
+        async def cleanup_robot_sessions() -> None:
+            while True:
+                await asyncio.sleep(60)
+                await asyncio.to_thread(robot_store.cleanup)
+
+        cleanup_task = asyncio.create_task(cleanup_robot_sessions())
+        try:
+            yield
+        finally:
+            cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await cleanup_task
 
     app = FastAPI(title="Laya Try Server Mode", version="1.0.0", lifespan=lifespan)
     static_dir = Path(__file__).parent / "static"
@@ -110,6 +127,7 @@ def create_app(
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
+        robot_sessions = robot_store.stats()
         return {
             "status": "ready" if backend.ready else "starting",
             "model": settings.model,
@@ -117,6 +135,7 @@ def create_app(
             "preloaded": settings.preload and backend.ready,
             "threads": settings.threads,
             "max_concurrent": settings.max_concurrent,
+            "robot_sessions": robot_sessions,
         }
 
     @app.post("/api/predict", dependencies=[Depends(authorize)])
@@ -165,29 +184,84 @@ def create_app(
             questions = request.questions or DEFAULT_ROUTE_QUESTION
             return await adk_runtime.run(request.state, questions, request.route_question)
 
-    def robot_state(session_id: str) -> dict[str, Any]:
+    def controller_header(value: str | None) -> str:
+        if not value:
+            raise HTTPException(status_code=403, detail="robot controller lease is required")
+        return value
+
+    def robot_state(
+        session_id: str, robot_controller: str | None = None
+    ) -> dict[str, Any]:
         try:
-            return robot_store.state(session_id)
+            return robot_store.state(session_id, robot_controller)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="robot session not found") from exc
 
+    def robot_error(exc: Exception) -> HTTPException:
+        if isinstance(exc, KeyError):
+            return HTTPException(status_code=404, detail="robot session not found")
+        if isinstance(exc, RobotLeaseConflict):
+            return HTTPException(
+                status_code=409,
+                detail="robot controller lease is already held",
+                headers={"Retry-After": str(settings.robot_lease_seconds)},
+            )
+        return HTTPException(status_code=403, detail="robot controller lease is missing or expired")
+
     @app.post("/api/robot/sessions", dependencies=[Depends(authorize)])
-    async def create_robot_session() -> dict[str, Any]:
-        return robot_store.create()
+    async def create_robot_session(
+        robot_controller_id: str | None = Header(default=None, alias="X-Robot-Controller-ID"),
+    ) -> dict[str, Any]:
+        return robot_store.create(robot_controller_id or "anonymous-controller")
 
     @app.get("/api/robot/{session_id}/state", dependencies=[Depends(authorize)])
-    async def get_robot_state(session_id: str) -> dict[str, Any]:
-        return robot_state(session_id)
+    async def get_robot_state(
+        session_id: str,
+        robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
+    ) -> dict[str, Any]:
+        return robot_state(session_id, robot_controller)
+
+    @app.post("/api/robot/{session_id}/lease/acquire", dependencies=[Depends(authorize)])
+    async def acquire_robot_lease(
+        session_id: str,
+        robot_controller_id: str | None = Header(default=None, alias="X-Robot-Controller-ID"),
+    ) -> dict[str, Any]:
+        try:
+            return robot_store.acquire(session_id, robot_controller_id or "anonymous-controller")
+        except (KeyError, RobotLeaseConflict) as exc:
+            raise robot_error(exc) from exc
+
+    @app.post("/api/robot/{session_id}/lease/heartbeat", dependencies=[Depends(authorize)])
+    async def heartbeat_robot_lease(
+        session_id: str,
+        robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
+    ) -> dict[str, Any]:
+        try:
+            return robot_store.heartbeat(session_id, controller_header(robot_controller))
+        except (KeyError, RobotControllerDenied) as exc:
+            raise robot_error(exc) from exc
+
+    @app.post("/api/robot/{session_id}/lease/release", dependencies=[Depends(authorize)])
+    async def release_robot_lease(
+        session_id: str,
+        robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
+    ) -> dict[str, Any]:
+        try:
+            return robot_store.release(session_id, controller_header(robot_controller))
+        except (KeyError, RobotControllerDenied) as exc:
+            raise robot_error(exc) from exc
 
     @app.post("/api/robot/{session_id}/command", dependencies=[Depends(authorize)])
     async def robot_command(
-        session_id: str, request: RobotCommandRequest
+        session_id: str,
+        request: RobotCommandRequest,
+        robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
     ) -> dict[str, Any]:
-        robot_state(session_id)
+        controller = controller_header(robot_controller)
         try:
-            cached = robot_store.cached(session_id, request.command_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="robot session not found") from exc
+            cached = robot_store.cached(session_id, request.command_id, controller)
+        except (KeyError, RobotControllerDenied) as exc:
+            raise robot_error(exc) from exc
         if cached is not None:
             return cached
 
@@ -230,15 +304,18 @@ def create_app(
                 resolver=resolution.resolver,
                 inference=inference,
                 forced_rejection=forced_rejection,
+                controller_token=controller,
             )
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="robot session not found") from exc
+        except (KeyError, RobotControllerDenied) as exc:
+            raise robot_error(exc) from exc
 
     @app.post("/api/robot/{session_id}/manual", dependencies=[Depends(authorize)])
     async def robot_manual(
-        session_id: str, request: RobotManualRequest
+        session_id: str,
+        request: RobotManualRequest,
+        robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
     ) -> dict[str, Any]:
-        robot_state(session_id)
+        controller = controller_header(robot_controller)
         try:
             return robot_store.apply(
                 session_id,
@@ -249,30 +326,40 @@ def create_app(
                 confidence=1.0,
                 threshold=0.0,
                 source="manual",
+                controller_token=controller,
             )
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="robot session not found") from exc
+        except (KeyError, RobotControllerDenied) as exc:
+            raise robot_error(exc) from exc
 
     @app.post("/api/robot/{session_id}/stop", dependencies=[Depends(authorize)])
-    async def robot_stop(session_id: str) -> dict[str, Any]:
+    async def robot_stop(
+        session_id: str,
+        robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
+    ) -> dict[str, Any]:
         try:
-            return robot_store.emergency_stop(session_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="robot session not found") from exc
+            return robot_store.emergency_stop(session_id, controller_header(robot_controller))
+        except (KeyError, RobotControllerDenied) as exc:
+            raise robot_error(exc) from exc
 
     @app.post("/api/robot/{session_id}/undo", dependencies=[Depends(authorize)])
-    async def robot_undo(session_id: str) -> dict[str, Any]:
+    async def robot_undo(
+        session_id: str,
+        robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
+    ) -> dict[str, Any]:
         try:
-            return robot_store.undo(session_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="robot session not found") from exc
+            return robot_store.undo(session_id, controller_header(robot_controller))
+        except (KeyError, RobotControllerDenied) as exc:
+            raise robot_error(exc) from exc
 
     @app.post("/api/robot/{session_id}/reset", dependencies=[Depends(authorize)])
-    async def robot_reset(session_id: str) -> dict[str, Any]:
+    async def robot_reset(
+        session_id: str,
+        robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
+    ) -> dict[str, Any]:
         try:
-            return robot_store.reset(session_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="robot session not found") from exc
+            return robot_store.reset(session_id, controller_header(robot_controller))
+        except (KeyError, RobotControllerDenied) as exc:
+            raise robot_error(exc) from exc
 
     @app.post("/api/robot/benchmark", dependencies=[Depends(authorize)])
     async def robot_benchmark(request: RobotBenchmarkRequest) -> dict[str, Any]:

@@ -3,22 +3,28 @@
   const token = $("robot-token");
   token.value = sessionStorage.getItem("laya-token") || "";
   token.addEventListener("input", () => sessionStorage.setItem("laya-token", token.value));
+  const controllerIdKey = "laya-robot-controller-id";
+  const controllerId = localStorage.getItem(controllerIdKey) || (globalThis.crypto?.randomUUID?.() || `device-${Date.now()}`);
+  localStorage.setItem(controllerIdKey, controllerId);
+  let controllerToken = "";
 
   class ApiError extends Error {
     constructor(message, status = 0) { super(message); this.status = status; }
   }
-  const headers = () => {
+  const headers = (withController = false) => {
     const value = {"Content-Type":"application/json"};
     if (token.value) value.Authorization = `Bearer ${token.value}`;
+    value["X-Robot-Controller-ID"] = controllerId;
+    if (withController && controllerToken) value["X-Robot-Controller"] = controllerToken;
     return value;
   };
-  async function api(path, body) {
+  async function api(path, body, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 120000);
     try {
       const response = await fetch(path, {
         method: body === undefined ? "GET" : "POST",
-        headers:headers(),
+        headers:headers(Boolean(options.controller)),
         body:body === undefined ? undefined : JSON.stringify(body),
         signal:controller.signal,
       });
@@ -38,36 +44,83 @@
   function percent(value) { return `${(Number(value || 0) * 100).toFixed(1)}%`; }
   function milliseconds(value) { return value == null ? "—" : `${Number(value).toFixed(1)} ms`; }
 
-  let sessionId = sessionStorage.getItem("laya-robot-session") || "";
+  const linkedSession = new URLSearchParams(location.search).get("session") || "";
+  let sessionId = linkedSession || sessionStorage.getItem("laya-robot-session") || "";
+  if (sessionId) controllerToken = sessionStorage.getItem(`laya-robot-controller-${sessionId}`) || "";
   let robotState = null;
   let pending = false;
   let logItems = [];
   let lastAsrMs = null;
+  let heartbeatTimer = null;
+  let pollTimer = null;
+
+  function saveControllerToken(value) {
+    controllerToken = value || "";
+    if (!sessionId) return;
+    if (controllerToken) sessionStorage.setItem(`laya-robot-controller-${sessionId}`, controllerToken);
+    else sessionStorage.removeItem(`laya-robot-controller-${sessionId}`);
+  }
 
   async function ensureSession() {
     if (sessionId) {
       try {
-        const state = await api(`/api/robot/${sessionId}/state`);
+        const state = await api(`/api/robot/${sessionId}/state`, undefined, {controller:true});
         renderState(state);
         return;
       } catch (error) {
         if (error.status !== 404) throw error;
+        saveControllerToken("");
+        sessionId = "";
       }
     }
     const state = await api("/api/robot/sessions", {});
     sessionId = state.session_id;
     sessionStorage.setItem("laya-robot-session", sessionId);
+    saveControllerToken(state.controller_token);
+    history.replaceState(null, "", `/robot?session=${encodeURIComponent(sessionId)}`);
     renderState(state);
   }
   function setConnection(online, text = online ? "ONLINE" : "OFFLINE") {
     $("connection").textContent = text;
     $("connection").classList.toggle("online", online);
   }
+  function isController() { return Boolean(robotState?.control?.is_controller); }
+  function handleLeaseLost(error) {
+    if (error.status !== 403) return false;
+    saveControllerToken("");
+    if (robotState?.control) robotState.control.is_controller = false;
+    renderControl(robotState?.control || {available:true, is_controller:false, expires_in_seconds:0});
+    $("command-error").textContent = "操作権の期限が切れました。操作権を取得してください。";
+    return true;
+  }
+  function startSessionTimers() {
+    clearInterval(heartbeatTimer); clearInterval(pollTimer);
+    heartbeatTimer = setInterval(async () => {
+      if (!sessionId || !controllerToken) return;
+      try {
+        const state = await api(`/api/robot/${sessionId}/lease/heartbeat`, {}, {controller:true});
+        renderState(state);
+      } catch (error) { handleLeaseLost(error); }
+    }, 10000);
+    pollTimer = setInterval(async () => {
+      if (!sessionId || pending || document.hidden) return;
+      try {
+        const state = await api(`/api/robot/${sessionId}/state`, undefined, {controller:true});
+        renderState(state);
+      } catch (error) {
+        if (error.status === 404) {
+          sessionId = ""; saveControllerToken("");
+          $("command-error").textContent = "セッションの期限が切れました。再読み込みしてください。";
+        }
+      }
+    }, 2000);
+  }
   async function initialize() {
     try {
       const health = await api("/health");
       setConnection(health.status === "ready", health.status === "ready" ? "ONLINE" : "STARTING");
       await ensureSession();
+      startSessionTimers();
       $("command-error").textContent = "";
     } catch (error) {
       setConnection(false);
@@ -120,7 +173,20 @@
     $("robot-mode").textContent = state.emergency_stopped ? "E-STOP" : "READY";
     $("robot-mode").className = `mode ${state.emergency_stopped ? "stopped" : "ready"}`;
     $("undo").disabled = !state.can_undo;
+    renderControl(state.control || {available:true, is_controller:false, expires_in_seconds:0});
     drawMap();
+  }
+  function renderControl(control) {
+    const controlling = Boolean(control.is_controller);
+    const available = Boolean(control.available);
+    $("control-panel").classList.toggle("controller", controlling);
+    $("control-status").textContent = controlling ? "この端末で操作中" : "閲覧モード";
+    $("control-detail").textContent = controlling
+      ? `操作権を維持しています（残り約${control.expires_in_seconds || 0}秒）`
+      : available ? "操作権を取得すると命令できます。" : "別の端末が操作中です。地図は自動更新されます。";
+    $("acquire-control").classList.toggle("hidden", controlling || !available);
+    $("release-control").classList.toggle("hidden", !controlling);
+    setPending(pending);
   }
   window.addEventListener("resize", drawMap);
 
@@ -156,42 +222,47 @@
     Object.entries(probabilities).sort((a,b) => b[1] - a[1]).slice(0, 3).forEach(([intent, value]) => {
       if (intent === "unknown") return;
       const button = document.createElement("button"); button.type = "button"; button.textContent = `${intentLabels[intent] || intent} ${percent(value)}`;
+      button.disabled = !isController();
       button.addEventListener("click", () => confirmIntent(intent)); target.append(button);
     });
   }
   function setPending(value) {
     pending = value;
-    $("send-command").disabled = value;
-    document.querySelectorAll("[data-manual],#undo,#reset").forEach(button => { button.disabled = value || (button.id === "undo" && !robotState?.can_undo); });
+    const locked = value || !isController();
+    $("send-command").disabled = locked;
+    $("voice").disabled = locked;
+    document.querySelectorAll("[data-manual],#emergency-stop,#undo,#reset,#candidates button").forEach(button => {
+      button.disabled = locked || (button.id === "undo" && !robotState?.can_undo);
+    });
   }
   async function executeVoiceCommand(text) {
-    if (pending || !text.trim()) { if (!text.trim()) $("command-error").textContent = "命令を入力してください。"; return; }
+    if (pending || !isController() || !text.trim()) { if (!text.trim()) $("command-error").textContent = "命令を入力してください。"; return; }
     setPending(true); $("command-error").textContent = "";
     try {
       await ensureSession();
-      const data = await api(`/api/robot/${sessionId}/command`, {command_id:commandId("voice"), utterance:text.trim()});
+      const data = await api(`/api/robot/${sessionId}/command`, {command_id:commandId("voice"), utterance:text.trim()}, {controller:true});
       renderDecision(data);
     } catch (error) {
-      $("command-error").textContent = error.status === 401 ? "Bearer Tokenを確認してください。" : error.message;
+      if (!handleLeaseLost(error)) $("command-error").textContent = error.status === 401 ? "Bearer Tokenを確認してください。" : error.message;
     } finally { setPending(false); }
   }
   async function manualCommand(intent) {
-    if (pending) return;
+    if (pending || !isController()) return;
     setPending(true); $("command-error").textContent = "";
     try {
       await ensureSession();
-      const data = await api(`/api/robot/${sessionId}/manual`, {command_id:commandId("manual"), intent, steps:1});
+      const data = await api(`/api/robot/${sessionId}/manual`, {command_id:commandId("manual"), intent, steps:1}, {controller:true});
       renderDecision(data);
-    } catch (error) { $("command-error").textContent = error.message; }
+    } catch (error) { if (!handleLeaseLost(error)) $("command-error").textContent = error.message; }
     finally { setPending(false); }
   }
   async function stateAction(action, label) {
-    if (pending && action !== "stop") return;
+    if (!isController() || (pending && action !== "stop")) return;
     try {
       await ensureSession();
-      const state = await api(`/api/robot/${sessionId}/${action}`, {});
+      const state = await api(`/api/robot/${sessionId}/${action}`, {}, {controller:true});
       renderState(state); addLog(label, label, true);
-    } catch (error) { $("command-error").textContent = error.message; }
+    } catch (error) { if (!handleLeaseLost(error)) $("command-error").textContent = error.message; }
   }
   function confirmIntent(intent) {
     if (["forward","backward","turn_left","turn_right"].includes(intent)) manualCommand(intent);
@@ -205,6 +276,39 @@
   $("undo").addEventListener("click", () => stateAction("undo", "1つ戻す"));
   $("reset").addEventListener("click", () => stateAction("reset", "初期位置へ戻す"));
   $("clear-log").addEventListener("click", () => { logItems = []; $("command-log").innerHTML = '<li class="empty">命令を待っています。</li>'; });
+  $("acquire-control").addEventListener("click", async () => {
+    if (!sessionId || pending) return;
+    try {
+      const state = await api(`/api/robot/${sessionId}/lease/acquire`, {});
+      saveControllerToken(state.controller_token);
+      renderState(state);
+      $("command-error").textContent = "";
+    } catch (error) {
+      $("command-error").textContent = error.status === 409 ? "別の端末が操作中です。しばらく待って再試行してください。" : error.message;
+    }
+  });
+  $("release-control").addEventListener("click", async () => {
+    if (!sessionId || !controllerToken) return;
+    try {
+      const state = await api(`/api/robot/${sessionId}/lease/release`, {}, {controller:true});
+      saveControllerToken("");
+      renderState(state);
+    } catch (error) {
+      if (!handleLeaseLost(error)) $("command-error").textContent = error.message;
+    }
+  });
+  $("share-session").addEventListener("click", async () => {
+    if (!sessionId) return;
+    const shareUrl = new URL("/robot", location.origin);
+    shareUrl.searchParams.set("session", sessionId);
+    try {
+      await navigator.clipboard.writeText(shareUrl.toString());
+      $("share-session").textContent = "コピーしました";
+      setTimeout(() => { $("share-session").textContent = "共有URLをコピー"; }, 1600);
+    } catch (_) {
+      window.prompt("このURLをコピーしてください", shareUrl.toString());
+    }
+  });
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null, listening = false, transcript = "", voiceStarted = 0, voiceError = "";
@@ -231,7 +335,18 @@
     transcript = ""; voiceError = ""; lastAsrMs = null;
     try { recognition.start(); } catch (_) { setVoice("少し待ってからもう一度お試しください。", true); }
   });
-  window.addEventListener("pagehide", () => { if (recognition && listening) recognition.abort(); });
+  window.addEventListener("pagehide", () => {
+    if (recognition && listening) recognition.abort();
+    clearInterval(heartbeatTimer); clearInterval(pollTimer);
+    if (sessionId && controllerToken) {
+      const releaseHeaders = headers(true);
+      fetch(`/api/robot/${sessionId}/lease/release`, {
+        method:"POST", headers:releaseHeaders, body:"{}", keepalive:true,
+      }).catch(() => {});
+      saveControllerToken("");
+    }
+  });
+  window.addEventListener("pageshow", event => { if (event.persisted) initialize(); });
 
   initialize();
 })();

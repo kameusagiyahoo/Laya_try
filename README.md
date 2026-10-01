@@ -181,6 +181,9 @@ FastAPIは `127.0.0.1:8000` のみにbindし、Tailscale Serveがtailnet内向�
 - 複数マスの経路に障害物があれば、途中まで動かさず命令全体を拒否します。
 - 緊急停止はLaya推論を通さず即時実行し、停止中はundoも無効です。resetで初期位置へ戻す操作だけが停止を解除します。
 - セッション、位置、軌跡、command IDはFastAPIプロセスのメモリ上で管理します。サーバー再起動後は新しいセッションになります。
+- 1セッションを操作できるのは同時に1端末だけです。操作端末はリースをheartbeatで更新し、画面を離れるか期限が切れると別端末が操作権を取得できます。
+- 「共有URLをコピー」で同じ地図を別端末から閲覧できます。閲覧端末の命令・手動操作は、操作権を取得するまで無効です。
+- 非アクティブなセッションは `LAYA_ROBOT_SESSION_TTL_SECONDS`（既定3600秒）で削除されます。リース時間は `LAYA_ROBOT_LEASE_SECONDS`（既定30秒）、同時保持数は `LAYA_ROBOT_MAX_SESSIONS`（既定100）で変更できます。
 - 現在は2Dシミュレーター専用で、実機ロボットは制御しません。
 
 安全のため、明示的な方向語は決定的resolver、複数動作を含む命令は `unknown`、操作語のない文章はsafety gateで `unknown` にします。Layaのraw intent・confidence・probabilitiesはレスポンスの `inference` に残り、UIには最終判断経路を表示します。
@@ -195,8 +198,13 @@ POST /api/robot/{session_id}/manual
 POST /api/robot/{session_id}/stop
 POST /api/robot/{session_id}/undo
 POST /api/robot/{session_id}/reset
+POST /api/robot/{session_id}/lease/acquire
+POST /api/robot/{session_id}/lease/heartbeat
+POST /api/robot/{session_id}/lease/release
 POST /api/robot/benchmark
 ```
+
+セッション作成とlease取得時は端末識別用の `X-Robot-Controller-ID` を送ります。作成・取得レスポンスの `controller_token` は秘密情報として端末内だけに保存し、操作APIでは `X-Robot-Controller` ヘッダーへ設定します。地図状態のGETはtokenなしでも可能ですが、Bearer認証を有効にした場合は閲覧にもBearer Tokenが必要です。
 
 Robot benchmark例:
 

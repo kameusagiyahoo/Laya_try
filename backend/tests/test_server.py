@@ -87,6 +87,7 @@ def test_health_reports_cpu_preloaded() -> None:
         "preloaded": True,
         "threads": 4,
         "max_concurrent": 4,
+        "robot_sessions": {"active_sessions": 0, "controlled_sessions": 0},
     }
 
 
@@ -96,7 +97,7 @@ def test_ui_serves_dynamic_question_builder() -> None:
         launcher = client.get("/")
         page = client.get("/decision-lab")
         robot = client.get("/robot")
-        robot_script = client.get("/static/robot.js?v=2")
+        robot_script = client.get("/static/robot.js?v=3")
         script = client.get("/static/server.js?v=9")
     assert launcher.status_code == 200
     assert 'href="/decision-lab"' in launcher.text
@@ -107,10 +108,13 @@ def test_ui_serves_dynamic_question_builder() -> None:
     assert 'id="voice"' in robot.text
     assert 'id="emergency-stop"' in robot.text
     assert 'id="decision-resolver"' in robot.text
-    assert "/static/robot.js?v=2" in robot.text
+    assert 'id="control-status"' in robot.text
+    assert 'id="acquire-control"' in robot.text
+    assert "/static/robot.js?v=3" in robot.text
     assert robot_script.status_code == 200
     assert "window.webkitSpeechRecognition" in robot_script.text
     assert "/command`" in robot_script.text
+    assert "/lease/heartbeat`" in robot_script.text
     assert 'id="add-question"' in page.text
     assert 'id="primary-question"' in page.text
     assert 'id="route-question"' in page.text
