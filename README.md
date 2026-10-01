@@ -21,12 +21,15 @@ Server ModeのURL:
 
 ```text
 https://<PC名>.<tailnet名>.ts.net/
-├── /                 mobile Web UI
+├── /                 demo launcher
+├── /decision-lab     Decision Lab demo
+├── /robot            Voice Robot demo
 ├── /health           server / model status
 ├── /v1/systemone     Jev互換の推論入口
 ├── /api/predict      計測情報付き推論
 ├── /api/benchmark    warmup分離benchmark
-└── /api/adk/run      Laya → Event(route) → Skill trace
+├── /api/adk/run      Laya → Event(route) → Skill trace
+└── /api/robot/*      server-authoritative robot simulator
 ```
 
 `billing`、`technical`、`sales`、`other`、`human` の5routeを用意しています。Layaのchoice confidenceが閾値未満なら `human` へfallbackします。
@@ -57,6 +60,7 @@ LAYA_THREADS=4
 LAYA_MAX_LOADED=1
 LAYA_MAX_CONCURRENT=4
 LAYA_CONFIDENCE_THRESHOLD=0.70
+LAYA_ROBOT_CONFIDENCE_THRESHOLD=0.80
 LAYA_HOST=127.0.0.1
 LAYA_PORT=8000
 ```
@@ -166,6 +170,39 @@ FastAPIは `127.0.0.1:8000` のみにbindし、Tailscale Serveがtailnet内向�
 音声認識には利用可能な場合はSafariのWeb Speech API、未対応時はiOS標準キーボードを使います。FastAPIへ送信するのは認識後の文字列だけで、音声データをLayaサーバーへ保存・送信する実装ではありません。
 
 モデルデータはUbuntu PC上だけにあり、iPhoneへダウンロードされません。
+
+### Voice Robot demo
+
+トップ画面から `Voice Robot` を選びます。「押して話す」で日本語命令を認識すると、Layaが `forward / backward / turn_left / turn_right / stop / reset / unknown` を判定します。文字欄からの送信と手動方向ボタンも利用できます。
+
+- 移動距離は1〜5マス。省略時は1マスです。
+- confidenceが `LAYA_ROBOT_CONFIDENCE_THRESHOLD` 未満なら移動しません。
+- 壁、マップ外、緊急停止中の移動はPC側で拒否します。
+- 複数マスの経路に障害物があれば、途中まで動かさず命令全体を拒否します。
+- 緊急停止はLaya推論を通さず即時実行します。resetで初期位置へ戻すと解除されます。
+- セッション、位置、軌跡、command IDはFastAPIプロセスのメモリ上で管理します。サーバー再起動後は新しいセッションになります。
+- 現在は2Dシミュレーター専用で、実機ロボットは制御しません。
+
+主要API:
+
+```text
+POST /api/robot/sessions
+GET  /api/robot/{session_id}/state
+POST /api/robot/{session_id}/command
+POST /api/robot/{session_id}/manual
+POST /api/robot/{session_id}/stop
+POST /api/robot/{session_id}/undo
+POST /api/robot/{session_id}/reset
+POST /api/robot/benchmark
+```
+
+Robot benchmark例:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/robot/benchmark \
+  -H 'Content-Type: application/json' \
+  -d '{"iterations":50,"utterance":"前へ進んで"}'
+```
 
 ## 8. Benchmark
 

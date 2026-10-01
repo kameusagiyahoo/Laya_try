@@ -1,5 +1,72 @@
 <!doctype html>
 <html lang="ja">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Voice Robot</title></head>
-<body><main><h1>Voice Robot</h1><p>Robot simulatorを準備中です。</p><a href="/">トップへ戻る</a></main></body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07131b">
+  <title>Voice Robot — Laya Try</title>
+  <link rel="stylesheet" href="/static/robot.css?v=1">
+</head>
+<body>
+  <main class="robot-shell">
+    <header>
+      <a class="back" href="/">← DEMOS</a>
+      <div class="header-line"><p class="eyebrow">VOICE ROBOT / CPU INFERENCE</p><span id="connection" class="connection">CONNECTING</span></div>
+      <h1>Speak.<br>Then move.</h1>
+      <p>日本語の命令をLayaが判定し、安全確認後に2Dロボットを動かします。</p>
+    </header>
+
+    <section class="panel map-panel">
+      <div class="panel-head"><div><span class="step">01</span><h2>Live Map</h2></div><b id="robot-mode" class="mode">READY</b></div>
+      <div class="canvas-wrap"><canvas id="robot-map" width="600" height="600" aria-label="ロボットの2次元マップ"></canvas></div>
+      <div class="robot-metrics">
+        <div><small>POSITION</small><strong id="position">—</strong></div>
+        <div><small>DIRECTION</small><strong id="direction">—</strong></div>
+        <div><small>LAST</small><strong id="last-command">—</strong></div>
+      </div>
+      <div class="legend"><span><i class="robot-key"></i>ROBOT</span><span><i class="wall-key"></i>WALL</span><span><i class="trail-key"></i>TRAIL</span><span><i class="home-key"></i>HOME</span></div>
+    </section>
+
+    <section class="panel voice-panel">
+      <div class="panel-head"><div><span class="step">02</span><h2>Voice Command</h2></div></div>
+      <button id="voice" class="voice-control" type="button" aria-pressed="false"><span class="mic-dot"></span><b id="voice-label">押して話す</b></button>
+      <p id="voice-status" class="voice-status" role="status" aria-live="polite">例：「前へ3マス進んで」「右を向いて」</p>
+      <label class="command-field"><span>認識された命令</span><textarea id="utterance" rows="3" placeholder="音声または文字で命令を入力"></textarea></label>
+      <div class="examples">
+        <button type="button" data-example="前へ2マス進んで">前へ2マス</button>
+        <button type="button" data-example="右を向いて">右を向く</button>
+        <button type="button" data-example="1マス戻って">1マス戻る</button>
+        <button type="button" data-example="止まって">停止</button>
+      </div>
+      <button id="send-command" class="primary-button" type="button">この命令を実行</button>
+      <p id="command-error" class="error" role="alert"></p>
+      <div id="decision" class="decision hidden">
+        <div><small>LAYA DECISION</small><strong id="decision-intent">—</strong><span id="decision-message">—</span></div>
+        <div class="decision-metrics"><span>CONF <b id="decision-confidence">—</b></span><span>ASR <b id="asr-time">—</b></span><span>Laya <b id="decision-time">—</b></span></div>
+        <div id="candidates" class="candidates"></div>
+      </div>
+    </section>
+
+    <section class="panel controls-panel">
+      <div class="panel-head"><div><span class="step">03</span><h2>Manual & Safety</h2></div></div>
+      <div class="dpad" aria-label="手動操作">
+        <button type="button" data-manual="turn_left" aria-label="左を向く">↶<small>LEFT</small></button>
+        <button type="button" data-manual="forward" aria-label="前へ進む">↑<small>FORWARD</small></button>
+        <button type="button" data-manual="turn_right" aria-label="右を向く">↷<small>RIGHT</small></button>
+        <span></span><button type="button" data-manual="backward" aria-label="後ろへ戻る">↓<small>BACK</small></button><span></span>
+      </div>
+      <button id="emergency-stop" class="stop-button" type="button">■ 緊急停止</button>
+      <div class="utility-row"><button id="undo" type="button">1つ戻す</button><button id="reset" type="button">初期位置へ戻す</button></div>
+    </section>
+
+    <section class="panel log-panel">
+      <div class="panel-head"><div><span class="step">04</span><h2>Command Log</h2></div><button id="clear-log" class="clear-log" type="button">消去</button></div>
+      <ol id="command-log" class="command-log"><li class="empty">命令を待っています。</li></ol>
+      <details class="settings"><summary>接続設定</summary><label><span>Bearer Token（設定時のみ）</span><input id="robot-token" type="password" autocomplete="off" placeholder="LAYA_API_KEY"></label><code id="session-id">session: —</code></details>
+    </section>
+
+    <footer>Simulation only · Server-authoritative safety · Tailscale private access</footer>
+  </main>
+  <script src="/static/robot.js?v=1"></script>
+</body>
 </html>
