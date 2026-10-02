@@ -97,7 +97,7 @@ def test_ui_serves_dynamic_question_builder() -> None:
         launcher = client.get("/")
         page = client.get("/decision-lab")
         robot = client.get("/robot")
-        robot_script = client.get("/static/robot.js?v=5")
+        robot_script = client.get("/static/robot.js?v=6")
         script = client.get("/static/server.js?v=9")
     assert launcher.status_code == 200
     assert 'href="/decision-lab"' in launcher.text
@@ -114,7 +114,9 @@ def test_ui_serves_dynamic_question_builder() -> None:
     assert 'id="latency-roundtrip"' in robot.text
     assert 'id="latency-overhead"' in robot.text
     assert 'id="map-update"' in robot.text
-    assert "/static/robot.js?v=5" in robot.text
+    assert 'id="feedback-correct"' in robot.text
+    assert 'data-feedback-intent="unknown"' in robot.text
+    assert "/static/robot.js?v=6" in robot.text
     assert robot_script.status_code == 200
     assert "window.webkitSpeechRecognition" in robot_script.text
     assert "/command`" in robot_script.text
@@ -123,6 +125,8 @@ def test_ui_serves_dynamic_question_builder() -> None:
     assert "data.timing?.server_ms" in robot_script.text
     assert "animateMap" in robot_script.text
     assert "MOVED · X" in robot_script.text
+    assert "/feedback`" in robot_script.text
+    assert "submitFeedback" in robot_script.text
     assert 'id="add-question"' in page.text
     assert 'id="primary-question"' in page.text
     assert 'id="route-question"' in page.text

@@ -39,6 +39,7 @@ class Settings:
     robot_session_ttl_seconds: int = 3600
     robot_lease_seconds: int = 30
     robot_max_sessions: int = 100
+    robot_feedback_path: str = "data/robot_feedback.jsonl"
     api_key: str | None = None
     host: str = "127.0.0.1"
     port: int = 8000
@@ -61,6 +62,10 @@ class Settings:
             robot_session_ttl_seconds=_int_env("LAYA_ROBOT_SESSION_TTL_SECONDS", 3600, 60),
             robot_lease_seconds=_int_env("LAYA_ROBOT_LEASE_SECONDS", 30, 10),
             robot_max_sessions=_int_env("LAYA_ROBOT_MAX_SESSIONS", 100),
+            robot_feedback_path=os.getenv(
+                "LAYA_ROBOT_FEEDBACK_PATH", "data/robot_feedback.jsonl"
+            ).strip()
+            or "data/robot_feedback.jsonl",
             api_key=os.getenv("LAYA_API_KEY") or None,
             host=os.getenv("LAYA_HOST", "127.0.0.1"),
             port=_int_env("LAYA_PORT", 8000),

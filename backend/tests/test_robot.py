@@ -53,10 +53,16 @@ class RobotMockBackend:
 
 
 def robot_client(
-    backend: RobotMockBackend | None = None, api_key: str | None = None
+    backend: RobotMockBackend | None = None,
+    api_key: str | None = None,
+    feedback_path: str = "data/robot_feedback.jsonl",
 ) -> tuple[TestClient, RobotMockBackend]:
     mock = backend or RobotMockBackend()
-    settings = Settings(api_key=api_key, robot_confidence_threshold=0.80)
+    settings = Settings(
+        api_key=api_key,
+        robot_confidence_threshold=0.80,
+        robot_feedback_path=feedback_path,
+    )
     return TestClient(create_app(mock, settings)), mock
 
 
@@ -190,6 +196,45 @@ def test_command_id_is_idempotent() -> None:
     assert second_body["timing"]["cached"] is True
     assert backend.calls == 1
     assert first.json()["robot"]["y"] == 7
+
+
+def test_robot_feedback_records_correction_locally(tmp_path: Path) -> None:
+    feedback_path = tmp_path / "robot-feedback.jsonl"
+    client, _ = robot_client(feedback_path=str(feedback_path))
+    with client:
+        session_id = create_session(client)
+        command = client.post(
+            f"/api/robot/{session_id}/command",
+            json={"command_id": "voice-feedback1", "utterance": "前へ進んで"},
+        )
+        recorded = client.post(
+            f"/api/robot/{session_id}/feedback",
+            json={
+                "command_id": command.json()["command_id"],
+                "verdict": "incorrect",
+                "expected_intent": "turn_right",
+            },
+        )
+        invalid = client.post(
+            f"/api/robot/{session_id}/feedback",
+            json={"command_id": command.json()["command_id"], "verdict": "incorrect"},
+        )
+        observer = client.post(
+            f"/api/robot/{session_id}/feedback",
+            headers={"X-Robot-Controller": "observer-token"},
+            json={"command_id": command.json()["command_id"], "verdict": "correct"},
+        )
+    entry = json.loads(feedback_path.read_text(encoding="utf-8").strip())
+    assert recorded.status_code == 200
+    assert recorded.json()["status"] == "recorded"
+    assert entry["utterance"] == "前へ進んで"
+    assert entry["final_intent"] == "forward"
+    assert entry["expected_intent"] == "turn_right"
+    assert entry["raw_intent"] == "forward"
+    assert entry["probabilities"]["forward"] == pytest.approx(0.95)
+    assert feedback_path.stat().st_mode & 0o777 == 0o600
+    assert invalid.status_code == 422
+    assert observer.status_code == 403
 
 
 def test_stop_blocks_commands_until_reset_and_undo_restores() -> None:

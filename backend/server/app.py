@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
+from .feedback import RobotFeedbackStore
 from .inference import InferenceBackend, LayaBackend, _answer_confidence, enrich_result
 from .robot import (
     ROBOT_COMMAND_QUESTION,
@@ -32,6 +33,7 @@ from .schemas import (
     PredictRequest,
     RobotBenchmarkRequest,
     RobotCommandRequest,
+    RobotFeedbackRequest,
     RobotManualRequest,
 )
 
@@ -53,6 +55,7 @@ def create_app(
         lease_seconds=settings.robot_lease_seconds,
         max_sessions=settings.robot_max_sessions,
     )
+    robot_feedback_store = RobotFeedbackStore(settings.robot_feedback_path)
     inference_lock = asyncio.Lock()
     admission_lock = asyncio.Lock()
     admitted_requests = 0
@@ -340,6 +343,43 @@ def create_app(
             )
         except (KeyError, RobotControllerDenied) as exc:
             raise robot_error(exc) from exc
+
+    @app.post("/api/robot/{session_id}/feedback", dependencies=[Depends(authorize)])
+    async def robot_feedback(
+        session_id: str,
+        request: RobotFeedbackRequest,
+        robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
+    ) -> dict[str, Any]:
+        controller = controller_header(robot_controller)
+        try:
+            command = robot_store.cached(session_id, request.command_id, controller)
+        except (KeyError, RobotControllerDenied) as exc:
+            raise robot_error(exc) from exc
+        if command is None:
+            raise HTTPException(status_code=404, detail="robot command not found")
+        inference = command.get("inference") or {}
+        feedback_id = await asyncio.to_thread(
+            robot_feedback_store.record,
+            {
+                "session_id": session_id,
+                "command_id": request.command_id,
+                "utterance": command.get("utterance"),
+                "source": command.get("source"),
+                "verdict": request.verdict,
+                "expected_intent": request.expected_intent or command.get("intent"),
+                "final_intent": command.get("intent"),
+                "final_confidence": command.get("confidence"),
+                "resolver": command.get("resolver"),
+                "applied": command.get("applied"),
+                "rejection_reason": command.get("rejection_reason"),
+                "raw_intent": inference.get("raw_intent"),
+                "raw_confidence": inference.get("raw_confidence"),
+                "probabilities": inference.get("probabilities") or {},
+                "model": inference.get("model"),
+                "device": inference.get("device"),
+            },
+        )
+        return {"status": "recorded", "feedback_id": feedback_id}
 
     @app.post("/api/robot/{session_id}/stop", dependencies=[Depends(authorize)])
     async def robot_stop(

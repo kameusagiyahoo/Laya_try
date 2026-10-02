@@ -53,6 +53,8 @@
   let lastAsrMs = null;
   let heartbeatTimer = null;
   let pollTimer = null;
+  let lastDecision = null;
+  let feedbackPending = false;
   const latencyStorageKey = "laya-robot-latency-v1";
   let latencyEntries = [];
   try {
@@ -254,6 +256,7 @@
     });
   }
   function renderDecision(data) {
+    lastDecision = data;
     renderState(data.robot);
     $("decision").classList.remove("hidden");
     $("decision-intent").textContent = `${intentLabels[data.intent] || data.intent}${["forward","backward"].includes(data.intent) ? ` × ${data.steps}` : ""}`;
@@ -265,6 +268,37 @@
     $("decision-message").textContent = message;
     addLog(data.utterance, data.applied ? (intentLabels[data.intent] || data.intent) : message, data.applied);
     renderCandidates(data.inference?.probabilities || {});
+    resetFeedback(data.source === "voice");
+  }
+  function resetFeedback(visible) {
+    $("feedback").classList.toggle("hidden", !visible);
+    $("feedback-verdict").classList.remove("hidden");
+    $("feedback-corrections").classList.add("hidden");
+    $("feedback-status").textContent = "";
+    $("feedback-status").classList.remove("error");
+    document.querySelectorAll("#feedback button").forEach(button => { button.disabled = false; });
+    feedbackPending = false;
+  }
+  async function submitFeedback(verdict, expectedIntent = null) {
+    if (feedbackPending || !lastDecision || !isController()) return;
+    feedbackPending = true;
+    document.querySelectorAll("#feedback button").forEach(button => { button.disabled = true; });
+    $("feedback-status").textContent = "保存しています…";
+    try {
+      await api(`/api/robot/${sessionId}/feedback`, {
+        command_id:lastDecision.command_id,
+        verdict,
+        expected_intent:expectedIntent,
+      }, {controller:true});
+      $("feedback-verdict").classList.add("hidden");
+      $("feedback-corrections").classList.add("hidden");
+      $("feedback-status").textContent = verdict === "correct" ? "ありがとうございます。正しい例として保存しました。" : "ありがとうございます。修正例として保存しました。";
+    } catch (error) {
+      feedbackPending = false;
+      document.querySelectorAll("#feedback button").forEach(button => { button.disabled = false; });
+      $("feedback-status").textContent = handleLeaseLost(error) ? "操作権を取得してから送信してください。" : `保存できませんでした: ${error.message}`;
+      $("feedback-status").classList.add("error");
+    }
   }
   function renderCandidates(probabilities) {
     const target = $("candidates"); target.replaceChildren();
@@ -396,6 +430,12 @@
   $("clear-latency").addEventListener("click", () => {
     latencyEntries = []; localStorage.removeItem(latencyStorageKey); renderLatency();
   });
+  $("feedback-correct").addEventListener("click", () => submitFeedback("correct"));
+  $("feedback-wrong").addEventListener("click", () => {
+    $("feedback-corrections").classList.remove("hidden");
+    $("feedback-status").textContent = "正しい動作を選んでください。";
+  });
+  document.querySelectorAll("[data-feedback-intent]").forEach(button => button.addEventListener("click", () => submitFeedback("incorrect", button.dataset.feedbackIntent)));
   $("acquire-control").addEventListener("click", async () => {
     if (!sessionId || pending) return;
     try {

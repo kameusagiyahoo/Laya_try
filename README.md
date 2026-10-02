@@ -186,6 +186,7 @@ FastAPIは `127.0.0.1:8000` のみにbindし、Tailscale Serveがtailnet内向�
 - 非アクティブなセッションは `LAYA_ROBOT_SESSION_TTL_SECONDS`（既定3600秒）で削除されます。リース時間は `LAYA_ROBOT_LEASE_SECONDS`（既定30秒）、同時保持数は `LAYA_ROBOT_MAX_SESSIONS`（既定100）で変更できます。
 - Latency MonitorはiPhone実機上でASR、HTTPS往復、PC側処理、Laya CPU推論、通信差分、描画、音声開始から描画完了までを分離して表示します。直近30件から平均とp95を計算し、数値だけを端末のlocalStorageへ保存します。発話文は計測履歴へ保存しません。
 - Live Mapはサーバーから返された座標を正として描画し、移動・旋回時はアニメーション、現在座標、`MOVED / TURNED` 表示で更新を明示します。
+- Laya判定後の「正しい／違う」から実利用フィードバックを保存できます。「違う」では正しい動作を選択します。発話文、生判定、最終判定、confidence、probabilities、正解をPC内のJSONLへ記録します。
 - 現在は2Dシミュレーター専用で、実機ロボットは制御しません。
 
 安全のため、明示的な方向語は決定的resolver、複数動作を含む命令は `unknown`、操作語のない文章はsafety gateで `unknown` にします。Layaのraw intent・confidence・probabilitiesはレスポンスの `inference` に残り、UIには最終判断経路を表示します。
@@ -200,6 +201,7 @@ POST /api/robot/{session_id}/manual
 POST /api/robot/{session_id}/stop
 POST /api/robot/{session_id}/undo
 POST /api/robot/{session_id}/reset
+POST /api/robot/{session_id}/feedback
 POST /api/robot/{session_id}/lease/acquire
 POST /api/robot/{session_id}/lease/heartbeat
 POST /api/robot/{session_id}/lease/release
@@ -209,6 +211,19 @@ POST /api/robot/benchmark
 セッション作成とlease取得時は端末識別用の `X-Robot-Controller-ID` を送ります。作成・取得レスポンスの `controller_token` は秘密情報として端末内だけに保存し、操作APIでは `X-Robot-Controller` ヘッダーへ設定します。地図状態のGETはtokenなしでも可能ですが、Bearer認証を有効にした場合は閲覧にもBearer Tokenが必要です。
 
 `POST /api/robot/{session_id}/command` の `timing.server_ms` はFastAPIハンドラ内の待機・推論・安全判定・状態更新を含みます。UIの `TRANSIT` はHTTPS往復からこの値を引いた概算で、Safari処理、Tailscale経路、HTTP解析を含みます。
+
+### Robot feedback dataset
+
+既定の保存先は `data/robot_feedback.jsonl` です。`LAYA_ROBOT_FEEDBACK_PATH` で変更できます。ファイルは作成時にmode `0600`となり、`data/robot_feedback*.jsonl` は `.gitignore` に含まれるためGitHubへcommitされません。フィードバックには実際の発話文が含まれるため、共有・バックアップ時は個人情報を確認してください。
+
+件数と誤判定だけを確認する例:
+
+```bash
+wc -l data/robot_feedback.jsonl
+jq -c 'select(.verdict == "incorrect") | {utterance,raw_intent,final_intent,expected_intent}' data/robot_feedback.jsonl
+```
+
+不要な収集データはサーバーを停止してから、このファイルを削除してください。
 
 Robot benchmark例:
 

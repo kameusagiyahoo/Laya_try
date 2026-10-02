@@ -126,4 +126,18 @@ class RobotBenchmarkRequest(BaseModel):
     utterance: str = Field(default="前へ進んで", min_length=1, max_length=2_000)
 
 
+class RobotFeedbackRequest(BaseModel):
+    command_id: str = Field(min_length=8, max_length=128)
+    verdict: Literal["correct", "incorrect"]
+    expected_intent: Literal[
+        "forward", "backward", "turn_left", "turn_right", "stop", "reset", "unknown"
+    ] | None = None
+
+    @model_validator(mode="after")
+    def incorrect_feedback_requires_expected_intent(self) -> "RobotFeedbackRequest":
+        if self.verdict == "incorrect" and self.expected_intent is None:
+            raise ValueError("incorrect feedback requires expected_intent")
+        return self
+
+
 RouteName = Literal["billing", "technical", "sales", "other", "human"]

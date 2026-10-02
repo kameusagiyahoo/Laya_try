@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#07131b">
   <title>Voice Robot — Laya Try</title>
-  <link rel="stylesheet" href="/static/robot.css?v=4">
+  <link rel="stylesheet" href="/static/robot.css?v=5">
 </head>
 <body>
   <main class="robot-shell">
@@ -57,6 +57,16 @@
         <div><small>LAYA DECISION</small><strong id="decision-intent">—</strong><span id="decision-message">—</span></div>
         <div class="decision-metrics"><span>CONF <b id="decision-confidence">—</b></span><span>VIA <b id="decision-resolver">—</b></span><span>ASR <b id="asr-time">—</b></span><span>Laya <b id="decision-time">—</b></span></div>
         <div id="candidates" class="candidates"></div>
+        <div id="feedback" class="feedback hidden">
+          <p>この判定は正しかったですか？</p>
+          <div id="feedback-verdict" class="feedback-actions"><button id="feedback-correct" type="button">✓ 正しい</button><button id="feedback-wrong" type="button">✕ 違う</button></div>
+          <div id="feedback-corrections" class="feedback-corrections hidden" aria-label="正しい動作を選択">
+            <span>正しい動作を選択</span>
+            <button type="button" data-feedback-intent="forward">前進</button><button type="button" data-feedback-intent="backward">後退</button><button type="button" data-feedback-intent="turn_left">左回転</button><button type="button" data-feedback-intent="turn_right">右回転</button><button type="button" data-feedback-intent="stop">停止</button><button type="button" data-feedback-intent="reset">リセット</button><button type="button" data-feedback-intent="unknown">命令ではない</button>
+          </div>
+          <p id="feedback-status" class="feedback-status" role="status"></p>
+          <small>送信すると発話文と判定内容を、このUbuntu PC内の改善データへ保存します。</small>
+        </div>
       </div>
     </section>
 
@@ -102,6 +112,6 @@
 
     <footer>Simulation only · Server-authoritative safety · Tailscale private access</footer>
   </main>
-  <script src="/static/robot.js?v=5"></script>
+  <script src="/static/robot.js?v=6"></script>
 </body>
 </html>
