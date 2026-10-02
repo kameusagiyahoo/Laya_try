@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#07131b">
   <title>Voice Robot — Laya Try</title>
-  <link rel="stylesheet" href="/static/robot.css?v=3">
+  <link rel="stylesheet" href="/static/robot.css?v=4">
 </head>
 <body>
   <main class="robot-shell">
@@ -30,7 +30,7 @@
     </section>
 
     <section class="panel map-panel">
-      <div class="panel-head"><div><span class="step">01</span><h2>Live Map</h2></div><b id="robot-mode" class="mode">READY</b></div>
+      <div class="panel-head"><div><span class="step">01</span><h2>Live Map</h2></div><div class="map-status"><span id="map-update">SYNCING</span><b id="robot-mode" class="mode">READY</b></div></div>
       <div class="canvas-wrap"><canvas id="robot-map" width="600" height="600" aria-label="ロボットの2次元マップ"></canvas></div>
       <div class="robot-metrics">
         <div><small>POSITION</small><strong id="position">—</strong></div>
@@ -102,6 +102,6 @@
 
     <footer>Simulation only · Server-authoritative safety · Tailscale private access</footer>
   </main>
-  <script src="/static/robot.js?v=4"></script>
+  <script src="/static/robot.js?v=5"></script>
 </body>
 </html>

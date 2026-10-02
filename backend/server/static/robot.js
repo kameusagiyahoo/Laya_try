@@ -139,7 +139,8 @@
   const context = canvas.getContext("2d");
   const directionAngles = {north:0, east:Math.PI / 2, south:Math.PI, west:-Math.PI / 2};
   const directionLabels = {north:"NORTH / 北", east:"EAST / 東", south:"SOUTH / 南", west:"WEST / 西"};
-  function drawMap() {
+  let mapAnimationFrame = null;
+  function drawMap(pose = null) {
     if (!robotState) return;
     const rect = canvas.getBoundingClientRect();
     const width = Math.max(280, rect.width || 600);
@@ -165,12 +166,54 @@
     }
     context.fillStyle = "#536d79";
     robotState.walls.forEach(wall => context.fillRect(wall.x * cell + 3, wall.y * cell + 3, cell - 6, cell - 6));
-    const centerX = (robotState.x + .5) * cell, centerY = (robotState.y + .5) * cell;
-    context.save(); context.translate(centerX, centerY); context.rotate(directionAngles[robotState.direction]);
-    context.beginPath(); context.moveTo(0, -cell * .35); context.lineTo(cell * .3, cell * .3); context.lineTo(0, cell * .18); context.lineTo(-cell * .3, cell * .3); context.closePath();
-    context.fillStyle = robotState.emergency_stopped ? "#ff7282" : "#61efbd"; context.shadowColor = context.fillStyle; context.shadowBlur = 14; context.fill(); context.restore();
+    const renderX = pose?.x ?? robotState.x, renderY = pose?.y ?? robotState.y;
+    const angle = pose?.angle ?? directionAngles[robotState.direction];
+    const centerX = (renderX + .5) * cell, centerY = (renderY + .5) * cell;
+    context.save(); context.translate(centerX, centerY);
+    context.beginPath(); context.arc(0, 0, cell * .34, 0, Math.PI * 2);
+    context.fillStyle = robotState.emergency_stopped ? "#ff7282" : "#61efbd"; context.shadowColor = context.fillStyle; context.shadowBlur = 16; context.fill();
+    context.rotate(angle); context.shadowBlur = 0; context.fillStyle = "#06242a";
+    context.beginPath(); context.moveTo(0, -cell * .27); context.lineTo(cell * .18, cell * .06); context.lineTo(cell * .06, cell * .02); context.lineTo(cell * .06, cell * .22); context.lineTo(-cell * .06, cell * .22); context.lineTo(-cell * .06, cell * .02); context.lineTo(-cell * .18, cell * .06); context.closePath(); context.fill(); context.restore();
+    context.font = `800 ${Math.max(8, cell * .18)}px system-ui`; context.textAlign = "center"; context.textBaseline = "middle";
+    context.fillStyle = "#ecfbff"; context.fillText(`${robotState.x},${robotState.y}`, centerX, Math.min(width - 5, centerY + cell * .48));
+  }
+  function showMapChange(state, moved, turned) {
+    const label = moved ? `MOVED · X${state.x} Y${state.y}` : turned ? `TURNED · ${state.direction.toUpperCase()}` : "SYNCED";
+    $("map-update").textContent = label;
+    $("map-update").classList.toggle("changed", moved || turned);
+    if (moved || turned) {
+      const panel = document.querySelector(".map-panel"); panel.classList.remove("map-changed");
+      requestAnimationFrame(() => panel.classList.add("map-changed"));
+    }
+  }
+  function animateMap(previous, state) {
+    if (mapAnimationFrame) cancelAnimationFrame(mapAnimationFrame);
+    const sameSession = previous?.session_id === state.session_id;
+    const moved = Boolean(sameSession && (previous.x !== state.x || previous.y !== state.y));
+    const turned = Boolean(sameSession && previous.direction !== state.direction);
+    showMapChange(state, moved, turned);
+    if (!moved && !turned) { drawMap(); return; }
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { drawMap(); return; }
+    const started = performance.now(), duration = 420;
+    const startAngle = directionAngles[previous.direction], targetAngle = directionAngles[state.direction];
+    let angleDelta = targetAngle - startAngle;
+    if (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
+    if (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
+    const frame = now => {
+      const progress = Math.min(1, (now - started) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      drawMap({
+        x: previous.x + (state.x - previous.x) * eased,
+        y: previous.y + (state.y - previous.y) * eased,
+        angle: startAngle + angleDelta * eased,
+      });
+      if (progress < 1) mapAnimationFrame = requestAnimationFrame(frame);
+      else mapAnimationFrame = null;
+    };
+    mapAnimationFrame = requestAnimationFrame(frame);
   }
   function renderState(state) {
+    const previous = robotState;
     robotState = state;
     $("session-id").textContent = `session: ${state.session_id}`;
     $("position").textContent = `X ${state.x} / Y ${state.y}`;
@@ -180,7 +223,7 @@
     $("robot-mode").className = `mode ${state.emergency_stopped ? "stopped" : "ready"}`;
     $("undo").disabled = !state.can_undo;
     renderControl(state.control || {available:true, is_controller:false, expires_in_seconds:0});
-    drawMap();
+    animateMap(previous, state);
   }
   function renderControl(control) {
     const controlling = Boolean(control.is_controller);
@@ -194,7 +237,7 @@
     $("release-control").classList.toggle("hidden", !controlling);
     setPending(pending);
   }
-  window.addEventListener("resize", drawMap);
+  window.addEventListener("resize", () => drawMap());
 
   const intentLabels = {forward:"前進", backward:"後退", turn_left:"左回転", turn_right:"右回転", stop:"停止", reset:"リセット", unknown:"不明"};
   const resolverLabels = {explicit_command:"明示命令", ambiguous_command:"複合命令", safety_gate:"安全判定", laya:"Laya", manual:"手動"};

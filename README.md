@@ -185,6 +185,7 @@ FastAPIは `127.0.0.1:8000` のみにbindし、Tailscale Serveがtailnet内向�
 - 「共有URLをコピー」で同じ地図を別端末から閲覧できます。閲覧端末の命令・手動操作は、操作権を取得するまで無効です。
 - 非アクティブなセッションは `LAYA_ROBOT_SESSION_TTL_SECONDS`（既定3600秒）で削除されます。リース時間は `LAYA_ROBOT_LEASE_SECONDS`（既定30秒）、同時保持数は `LAYA_ROBOT_MAX_SESSIONS`（既定100）で変更できます。
 - Latency MonitorはiPhone実機上でASR、HTTPS往復、PC側処理、Laya CPU推論、通信差分、描画、音声開始から描画完了までを分離して表示します。直近30件から平均とp95を計算し、数値だけを端末のlocalStorageへ保存します。発話文は計測履歴へ保存しません。
+- Live Mapはサーバーから返された座標を正として描画し、移動・旋回時はアニメーション、現在座標、`MOVED / TURNED` 表示で更新を明示します。
 - 現在は2Dシミュレーター専用で、実機ロボットは制御しません。
 
 安全のため、明示的な方向語は決定的resolver、複数動作を含む命令は `unknown`、操作語のない文章はsafety gateで `unknown` にします。Layaのraw intent・confidence・probabilitiesはレスポンスの `inference` に残り、UIには最終判断経路を表示します。
