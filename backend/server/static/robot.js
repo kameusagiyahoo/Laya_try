@@ -53,6 +53,12 @@
   let lastAsrMs = null;
   let heartbeatTimer = null;
   let pollTimer = null;
+  const latencyStorageKey = "laya-robot-latency-v1";
+  let latencyEntries = [];
+  try {
+    const storedLatency = JSON.parse(localStorage.getItem(latencyStorageKey) || "[]");
+    if (Array.isArray(storedLatency)) latencyEntries = storedLatency.slice(0, 30);
+  } catch (_) { latencyEntries = []; }
 
   function saveControllerToken(value) {
     controllerToken = value || "";
@@ -226,6 +232,51 @@
       button.addEventListener("click", () => confirmIntent(intent)); target.append(button);
     });
   }
+  function nextPaint() {
+    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
+  function latencyValue(value) { return Number.isFinite(value) ? `${value.toFixed(1)} ms` : "—"; }
+  function percentile95(values) {
+    if (!values.length) return null;
+    const ordered = [...values].sort((a, b) => a - b);
+    return ordered[Math.max(0, Math.ceil(ordered.length * .95) - 1)];
+  }
+  function renderLatency(latest = latencyEntries[0]) {
+    const fields = {
+      "latency-total": latest?.total_ms,
+      "latency-asr": latest?.asr_ms,
+      "latency-roundtrip": latest?.roundtrip_ms,
+      "latency-server": latest?.server_ms,
+      "latency-laya": latest?.laya_ms,
+      "latency-overhead": latest?.overhead_ms,
+      "latency-transit": latest?.transit_ms,
+      "latency-render": latest?.render_ms,
+    };
+    Object.entries(fields).forEach(([id, value]) => { $(id).textContent = latencyValue(value); });
+    const totals = latencyEntries.map(item => item.total_ms).filter(Number.isFinite);
+    const roundtrips = latencyEntries.map(item => item.roundtrip_ms).filter(Number.isFinite);
+    $("latency-samples").textContent = String(latencyEntries.length);
+    $("latency-mean").textContent = latencyValue(totals.length ? totals.reduce((sum, value) => sum + value, 0) / totals.length : null);
+    $("latency-p95").textContent = latencyValue(percentile95(totals));
+    $("latency-rtt-mean").textContent = latencyValue(roundtrips.length ? roundtrips.reduce((sum, value) => sum + value, 0) / roundtrips.length : null);
+    const list = $("latency-history"); list.replaceChildren();
+    if (!latencyEntries.length) {
+      const empty = document.createElement("li"); empty.className = "empty"; empty.textContent = "計測結果はまだありません。"; list.append(empty); return;
+    }
+    latencyEntries.slice(0, 8).forEach(item => {
+      const row = document.createElement("li"), measured = document.createElement("time"), detail = document.createElement("span"), total = document.createElement("b");
+      measured.textContent = new Date(item.measured_at).toLocaleTimeString("ja-JP", {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+      detail.textContent = `${item.mode === "voice" ? "音声" : "文字"} · RTT ${latencyValue(item.roundtrip_ms)}`;
+      total.textContent = latencyValue(item.total_ms);
+      row.append(measured, detail, total); list.append(row);
+    });
+  }
+  function recordLatency(entry) {
+    latencyEntries.unshift(entry);
+    latencyEntries = latencyEntries.slice(0, 30);
+    localStorage.setItem(latencyStorageKey, JSON.stringify(latencyEntries));
+    renderLatency(entry);
+  }
   function setPending(value) {
     pending = value;
     const locked = value || !isController();
@@ -240,8 +291,31 @@
     setPending(true); $("command-error").textContent = "";
     try {
       await ensureSession();
+      const voiceMeasurement = lastAsrMs != null && voiceStarted > 0;
+      const totalStarted = voiceMeasurement ? voiceStarted : performance.now();
+      const requestStarted = performance.now();
       const data = await api(`/api/robot/${sessionId}/command`, {command_id:commandId("voice"), utterance:text.trim()}, {controller:true});
+      const responseReceived = performance.now();
+      const renderStarted = performance.now();
       renderDecision(data);
+      await nextPaint();
+      const rendered = performance.now();
+      const roundtripMs = responseReceived - requestStarted;
+      const serverMs = Number(data.timing?.server_ms);
+      const layaMs = Number(data.inference?.inference_ms);
+      recordLatency({
+        measured_at: Date.now(),
+        mode: voiceMeasurement ? "voice" : "text",
+        asr_ms: voiceMeasurement ? lastAsrMs : null,
+        roundtrip_ms: roundtripMs,
+        server_ms: Number.isFinite(serverMs) ? serverMs : null,
+        laya_ms: Number.isFinite(layaMs) ? layaMs : null,
+        overhead_ms: Number.isFinite(serverMs) && Number.isFinite(layaMs) ? Math.max(0, serverMs - layaMs) : null,
+        transit_ms: Number.isFinite(serverMs) ? Math.max(0, roundtripMs - serverMs) : null,
+        render_ms: rendered - renderStarted,
+        total_ms: rendered - totalStarted,
+      });
+      voiceStarted = 0;
     } catch (error) {
       if (!handleLeaseLost(error)) $("command-error").textContent = error.status === 401 ? "Bearer Tokenを確認してください。" : error.message;
     } finally { setPending(false); }
@@ -276,6 +350,9 @@
   $("undo").addEventListener("click", () => stateAction("undo", "1つ戻す"));
   $("reset").addEventListener("click", () => stateAction("reset", "初期位置へ戻す"));
   $("clear-log").addEventListener("click", () => { logItems = []; $("command-log").innerHTML = '<li class="empty">命令を待っています。</li>'; });
+  $("clear-latency").addEventListener("click", () => {
+    latencyEntries = []; localStorage.removeItem(latencyStorageKey); renderLatency();
+  });
   $("acquire-control").addEventListener("click", async () => {
     if (!sessionId || pending) return;
     try {
@@ -348,5 +425,6 @@
   });
   window.addEventListener("pageshow", event => { if (event.persisted) initialize(); });
 
+  renderLatency();
   initialize();
 })();

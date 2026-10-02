@@ -257,12 +257,17 @@ def create_app(
         request: RobotCommandRequest,
         robot_controller: str | None = Header(default=None, alias="X-Robot-Controller"),
     ) -> dict[str, Any]:
+        server_started = time.perf_counter()
         controller = controller_header(robot_controller)
         try:
             cached = robot_store.cached(session_id, request.command_id, controller)
         except (KeyError, RobotControllerDenied) as exc:
             raise robot_error(exc) from exc
         if cached is not None:
+            cached["timing"] = {
+                "server_ms": round((time.perf_counter() - server_started) * 1000, 3),
+                "cached": True,
+            }
             return cached
 
         async with admission_slot():
@@ -292,7 +297,7 @@ def create_app(
             "resolver": resolution.resolver,
         }
         try:
-            return robot_store.apply(
+            response = robot_store.apply(
                 session_id,
                 command_id=request.command_id,
                 utterance=request.utterance,
@@ -306,6 +311,11 @@ def create_app(
                 forced_rejection=forced_rejection,
                 controller_token=controller,
             )
+            response["timing"] = {
+                "server_ms": round((time.perf_counter() - server_started) * 1000, 3),
+                "cached": False,
+            }
+            return response
         except (KeyError, RobotControllerDenied) as exc:
             raise robot_error(exc) from exc
 

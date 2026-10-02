@@ -147,6 +147,8 @@ def test_voice_command_uses_laya_and_parses_steps() -> None:
     assert body["robot"]["y"] == 6
     assert body["robot"]["x"] == 1
     assert body["rejection_reason"] is None
+    assert body["timing"]["server_ms"] >= body["inference"]["inference_ms"]
+    assert body["timing"]["cached"] is False
 
 
 def test_low_confidence_and_out_of_range_do_not_move() -> None:
@@ -180,7 +182,12 @@ def test_command_id_is_idempotent() -> None:
         session_id = create_session(client)
         first = client.post(f"/api/robot/{session_id}/command", json=payload)
         second = client.post(f"/api/robot/{session_id}/command", json=payload)
-    assert first.json() == second.json()
+    first_body = first.json()
+    second_body = second.json()
+    assert {key: value for key, value in first_body.items() if key != "timing"} == {
+        key: value for key, value in second_body.items() if key != "timing"
+    }
+    assert second_body["timing"]["cached"] is True
     assert backend.calls == 1
     assert first.json()["robot"]["y"] == 7
 
